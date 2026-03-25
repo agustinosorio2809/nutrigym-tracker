@@ -42,6 +42,7 @@ export default function Dashboard({ session }) {
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState('')
   const [ejerciciosDisponibles, setEjerciciosDisponibles] = useState([])
   const [evolucionCargas, setEvolucionCargas] = useState([])
+  const [sesionGymHoy, setSesionGymHoy] = useState(null)
 
   const hoy = new Date()
   const diaSemana = hoy.getDay() === 0 ? 6 : hoy.getDay() - 1
@@ -51,25 +52,34 @@ export default function Dashboard({ session }) {
   useEffect(() => { if (vista === 'reportes') cargarReportes() }, [vista, semanaReporte, reporteVista])
   useEffect(() => { if (reporteVista === 'cargas' && ejercicioSeleccionado) cargarEvolucion() }, [ejercicioSeleccionado])
 
-  async function cargarHoy() {
-    setLoading(true)
-    const fechaLunes = formatFecha(lunes)
-    let { data: planes } = await supabase.from('meal_plans').select('*').eq('week_start', fechaLunes)
-    const plan = planes?.[0]
-    if (!plan) { setLoading(false); return }
-    const { data: meals } = await supabase.from('planned_meals').select('*')
-      .eq('plan_id', plan.id).eq('day_of_week', diaSemana).order('slot')
-    const ordered = SLOTS.map(s => meals?.find(m => m.slot === s)).filter(Boolean)
-    setComidas(ordered)
-    if (meals?.length) {
-      const ids = meals.map(m => m.id)
-      const { data: logsData } = await supabase.from('meal_logs').select('*').in('planned_meal_id', ids)
-      const mapa = {}
-      logsData?.forEach(l => { mapa[l.planned_meal_id] = l })
-      setLogs(mapa)
-    }
-    setLoading(false)
+async function cargarHoy() {
+  setLoading(true)
+  const fechaHoy = formatFecha(hoy)
+  const fechaLunes = formatFecha(lunes)
+
+  // Gym — siempre se carga, independiente del plan
+  const { data: gymHoy } = await supabase.from('gym_logs').select('*').eq('user_id', session.user.id).eq('date', fechaHoy)
+  setSesionGymHoy(gymHoy?.[0] || null)
+
+  let { data: planes } = await supabase.from('meal_plans').select('*').eq('week_start', fechaLunes)
+  const plan = planes?.[0]
+  if (!plan) { setLoading(false); return }
+
+  const { data: meals } = await supabase.from('planned_meals').select('*')
+    .eq('plan_id', plan.id).eq('day_of_week', diaSemana).order('slot')
+  const ordered = SLOTS.map(s => meals?.find(m => m.slot === s)).filter(Boolean)
+  setComidas(ordered)
+
+  if (meals?.length) {
+    const ids = meals.map(m => m.id)
+    const { data: logsData } = await supabase.from('meal_logs').select('*').in('planned_meal_id', ids)
+    const mapa = {}
+    logsData?.forEach(l => { mapa[l.planned_meal_id] = l })
+    setLogs(mapa)
   }
+
+  setLoading(false)
+}
 
   async function cargarReportes() {
     setLoadingReporte(true)
@@ -253,6 +263,25 @@ export default function Dashboard({ session }) {
               </div>
             )}
           </div>
+		  {/* ── Gym hoy ── */}
+<div style={{
+  display: 'flex', alignItems: 'center', gap: '0.75rem',
+  padding: '0.6rem 1rem', borderRadius: '8px', marginBottom: '1rem',
+  background: sesionGymHoy ? '#f0f9f6' : '#fafafa',
+  border: `1px solid ${sesionGymHoy ? '#148F77' : '#ddd'}`
+}}>
+  <span style={{ fontSize: '1.1rem' }}>🏋️</span>
+  {sesionGymHoy ? (
+    <div style={{ flex: 1 }}>
+      <span style={{ fontWeight: 500, fontSize: '0.9rem', color: '#1A5276' }}>{sesionGymHoy.routine_type || 'Entrenamiento'}</span>
+      <span style={{ marginLeft: '0.75rem', fontSize: '0.8rem', color: sesionGymHoy.completed ? '#148F77' : '#D4AC0D' }}>
+        {sesionGymHoy.completed ? '✓ Completado' : '⏳ En progreso'}
+      </span>
+    </div>
+  ) : (
+    <span style={{ fontSize: '0.85rem', color: '#aaa' }}>Sin entrenamiento registrado hoy</span>
+  )}
+</div>
           {loading ? <p>Cargando...</p> : comidas.length === 0 ? (
             <p style={{ color: '#888' }}>No hay comidas planificadas para hoy. Cargalas en <a href="/plan">Plan semanal</a>.</p>
           ) : (
