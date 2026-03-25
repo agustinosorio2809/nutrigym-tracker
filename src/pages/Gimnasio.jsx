@@ -3,6 +3,16 @@ import { supabase } from '../supabase'
 
 const RUTINAS = ['Tren Inferior + Core', 'Full Body Funcional', 'Tren Superior + Core', 'Intermitente Fútbol', 'Recuperación Activa', 'Partido Futsal', 'Otra']
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+  return isMobile
+}
+
 export default function Gimnasio({ session }) {
   const [sesiones, setSesiones] = useState([])
   const [loading, setLoading] = useState(true)
@@ -14,6 +24,7 @@ export default function Gimnasio({ session }) {
   const [saving, setSaving] = useState(false)
   const [modalEj, setModalEj] = useState(null)
   const [cargandoPlantilla, setCargandoPlantilla] = useState(false)
+  const isMobile = useIsMobile()
 
   const hoy = new Date().toISOString().split('T')[0]
 
@@ -53,29 +64,14 @@ export default function Gimnasio({ session }) {
     if (!sesionHoy) { alert('Primero creá la sesión.'); return }
     if (ejercicios.length > 0 && !confirm('Ya tenés ejercicios cargados. ¿Reemplazarlos con la plantilla?')) return
     setCargandoPlantilla(true)
-    const { data: plantilla } = await supabase
-      .from('routine_templates')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .eq('routine_type', formSesion.routine_type)
-      .order('sort_order')
-
+    const { data: plantilla } = await supabase.from('routine_templates').select('*')
+      .eq('user_id', session.user.id).eq('routine_type', formSesion.routine_type).order('sort_order')
     if (!plantilla?.length) { alert('No hay plantilla para este tipo de rutina.'); setCargandoPlantilla(false); return }
-
-    if (ejercicios.length > 0) {
-      await supabase.from('gym_exercises').delete().eq('log_id', sesionHoy.id)
-    }
-
+    if (ejercicios.length > 0) await supabase.from('gym_exercises').delete().eq('log_id', sesionHoy.id)
     const nuevos = plantilla.map(p => ({
-      log_id: sesionHoy.id,
-      exercise_name: p.exercise_name,
-      sets: p.default_sets,
-      reps: p.default_reps,
-      weight_kg: p.default_weight_kg,
-      rir: null,
-      notes: ''
+      log_id: sesionHoy.id, exercise_name: p.exercise_name,
+      sets: p.default_sets, reps: p.default_reps, weight_kg: p.default_weight_kg, rir: null, notes: ''
     }))
-
     await supabase.from('gym_exercises').insert(nuevos)
     await cargarHoy()
     setCargandoPlantilla(false)
@@ -85,10 +81,8 @@ export default function Gimnasio({ session }) {
     setSaving(true)
     const datos = {
       ...formEj,
-      sets: Number(formEj.sets) || null,
-      reps: Number(formEj.reps) || null,
-      weight_kg: Number(formEj.weight_kg) || null,
-      rir: Number(formEj.rir) || null,
+      sets: Number(formEj.sets) || null, reps: Number(formEj.reps) || null,
+      weight_kg: Number(formEj.weight_kg) || null, rir: Number(formEj.rir) || null,
       log_id: sesionHoy.id
     }
     if (modalEj === 'nuevo') {
@@ -96,10 +90,8 @@ export default function Gimnasio({ session }) {
     } else {
       await supabase.from('gym_exercises').update(datos).eq('id', modalEj.id)
     }
-    await cargarHoy()
-    await cargarHistorial()
-    setSaving(false)
-    setModalEj(null)
+    await cargarHoy(); await cargarHistorial()
+    setSaving(false); setModalEj(null)
   }
 
   async function eliminarEjercicio(id) {
@@ -120,9 +112,63 @@ export default function Gimnasio({ session }) {
 
   const inp = { display: 'block', width: '100%', padding: '0.4rem', margin: '0.25rem 0 0.75rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }
 
+  // ── Tabla desktop ──
+  const tablaEjercicios = (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+      <thead>
+        <tr style={{ background: '#1A5276', color: 'white' }}>
+          {['Ejercicio', 'Series', 'Reps', 'Kg', 'RIR', 'Notas', ''].map(h => (
+            <th key={h} style={{ padding: '0.5rem', textAlign: 'left', fontWeight: 500 }}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {ejercicios.map((ej, i) => (
+          <tr key={ej.id} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white' }}>
+            <td style={{ padding: '0.5rem', fontWeight: 500 }}>{ej.exercise_name}</td>
+            <td style={{ padding: '0.5rem' }}>{ej.sets || '—'}</td>
+            <td style={{ padding: '0.5rem' }}>{ej.reps || '—'}</td>
+            <td style={{ padding: '0.5rem' }}>{ej.weight_kg || '—'}</td>
+            <td style={{ padding: '0.5rem' }}>{ej.rir ?? '—'}</td>
+            <td style={{ padding: '0.5rem', color: '#666', fontSize: '0.8rem' }}>{ej.notes || ''}</td>
+            <td style={{ padding: '0.5rem' }}>
+              <button onClick={() => abrirEditarEj(ej)} style={{ fontSize: '0.75rem', marginRight: '0.25rem', border: '1px solid #ccc', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer' }}>Editar</button>
+              <button onClick={() => eliminarEjercicio(ej.id)} style={{ fontSize: '0.75rem', border: '1px solid #C0392B', color: '#C0392B', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer', background: 'transparent' }}>✕</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+
+  // ── Cards mobile ──
+  const cardsEjercicios = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+      {ejercicios.map(ej => (
+        <div key={ej.id} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '0.75rem 1rem', background: 'white' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+            <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{ej.exercise_name}</div>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button onClick={() => abrirEditarEj(ej)} style={{ fontSize: '0.75rem', border: '1px solid #ccc', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer' }}>Editar</button>
+              <button onClick={() => eliminarEjercicio(ej.id)} style={{ fontSize: '0.75rem', border: '1px solid #C0392B', color: '#C0392B', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer', background: 'transparent' }}>✕</button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: '#444' }}>
+            {ej.sets && <span><strong>{ej.sets}</strong> series</span>}
+            {ej.reps && <span><strong>{ej.reps}</strong> reps</span>}
+            {ej.weight_kg && <span><strong>{ej.weight_kg}</strong> kg</span>}
+            {ej.rir != null && ej.rir !== '' && <span>RIR <strong>{ej.rir}</strong></span>}
+          </div>
+          {ej.notes && <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.4rem', fontStyle: 'italic' }}>{ej.notes}</div>}
+        </div>
+      ))}
+    </div>
+  )
+
   return (
     <div>
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+      {/* Tabs Hoy / Historial */}
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
         <button onClick={() => setVista('hoy')} style={{ padding: '0.4rem 1rem', borderRadius: '4px', border: 'none', cursor: 'pointer', background: vista === 'hoy' ? '#1A5276' : '#eee', color: vista === 'hoy' ? 'white' : '#333' }}>Hoy</button>
         <button onClick={() => setVista('historial')} style={{ padding: '0.4rem 1rem', borderRadius: '4px', border: 'none', cursor: 'pointer', background: vista === 'historial' ? '#1A5276' : '#eee', color: vista === 'historial' ? 'white' : '#333' }}>Historial</button>
       </div>
@@ -130,11 +176,13 @@ export default function Gimnasio({ session }) {
       {vista === 'hoy' && (
         <div>
           <h2 style={{ marginTop: 0 }}>Entrenamiento de hoy</h2>
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'flex-end' }}>
+
+          {/* Controles de sesión */}
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'flex-end' }}>
             <div>
               <label style={{ fontSize: '0.85rem' }}>Tipo de rutina</label>
               <select value={formSesion.routine_type} onChange={e => setFormSesion({ ...formSesion, routine_type: e.target.value })}
-                style={{ display: 'block', padding: '0.4rem', border: '1px solid #ccc', borderRadius: '4px', marginTop: '0.25rem' }}>
+                style={{ display: 'block', padding: '0.4rem', border: '1px solid #ccc', borderRadius: '4px', marginTop: '0.25rem', width: isMobile ? '100%' : 'auto' }}>
                 <option value="">— seleccioná —</option>
                 {RUTINAS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
@@ -173,31 +221,7 @@ export default function Gimnasio({ session }) {
                   {formSesion.routine_type && <span> Tocá <strong>Cargar plantilla</strong> para pre-cargar los ejercicios de {formSesion.routine_type}.</span>}
                 </p>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                  <thead>
-                    <tr style={{ background: '#1A5276', color: 'white' }}>
-                      {['Ejercicio', 'Series', 'Reps', 'Kg', 'RIR', 'Notas', ''].map(h => (
-                        <th key={h} style={{ padding: '0.5rem', textAlign: 'left', fontWeight: 500 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ejercicios.map((ej, i) => (
-                      <tr key={ej.id} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white' }}>
-                        <td style={{ padding: '0.5rem', fontWeight: 500 }}>{ej.exercise_name}</td>
-                        <td style={{ padding: '0.5rem' }}>{ej.sets || '—'}</td>
-                        <td style={{ padding: '0.5rem' }}>{ej.reps || '—'}</td>
-                        <td style={{ padding: '0.5rem' }}>{ej.weight_kg || '—'}</td>
-                        <td style={{ padding: '0.5rem' }}>{ej.rir ?? '—'}</td>
-                        <td style={{ padding: '0.5rem', color: '#666', fontSize: '0.8rem' }}>{ej.notes || ''}</td>
-                        <td style={{ padding: '0.5rem' }}>
-                          <button onClick={() => abrirEditarEj(ej)} style={{ fontSize: '0.75rem', marginRight: '0.25rem', border: '1px solid #ccc', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer' }}>Editar</button>
-                          <button onClick={() => eliminarEjercicio(ej.id)} style={{ fontSize: '0.75rem', border: '1px solid #C0392B', color: '#C0392B', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer', background: 'transparent' }}>✕</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                isMobile ? cardsEjercicios : tablaEjercicios
               )}
             </div>
           )}
@@ -211,7 +235,7 @@ export default function Gimnasio({ session }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {sesiones.map(s => (
                 <div key={s.id} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.4rem' }}>
                     <div>
                       <strong>{new Date(s.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
                       {s.routine_type && <span style={{ marginLeft: '0.75rem', background: '#D6EAF8', color: '#1A5276', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem' }}>{s.routine_type}</span>}
@@ -234,26 +258,27 @@ export default function Gimnasio({ session }) {
         </div>
       )}
 
+      {/* Modal ejercicio */}
       {modalEj && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', width: '100%', maxWidth: '440px' }}>
+          <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', width: '90%', maxWidth: '440px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginTop: 0 }}>{modalEj === 'nuevo' ? 'Agregar ejercicio' : 'Editar ejercicio'}</h3>
             <label>Ejercicio</label>
             <input value={formEj.exercise_name} onChange={e => setFormEj({ ...formEj, exercise_name: e.target.value })} style={inp} placeholder="Ej: Sentadilla con barra" />
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <div style={{ flex: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <div>
                 <label>Series</label>
                 <input type="number" value={formEj.sets} onChange={e => setFormEj({ ...formEj, sets: e.target.value })} style={inp} placeholder="4" />
               </div>
-              <div style={{ flex: 1 }}>
+              <div>
                 <label>Reps</label>
                 <input type="number" value={formEj.reps} onChange={e => setFormEj({ ...formEj, reps: e.target.value })} style={inp} placeholder="8" />
               </div>
-              <div style={{ flex: 1 }}>
+              <div>
                 <label>Peso (kg)</label>
                 <input type="number" value={formEj.weight_kg} onChange={e => setFormEj({ ...formEj, weight_kg: e.target.value })} style={inp} placeholder="80" />
               </div>
-              <div style={{ flex: 1 }}>
+              <div>
                 <label>RIR</label>
                 <input type="number" min="0" max="4" value={formEj.rir} onChange={e => setFormEj({ ...formEj, rir: e.target.value })} style={inp} placeholder="2" />
               </div>
