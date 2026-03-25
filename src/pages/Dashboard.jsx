@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import * as XLSX from 'xlsx'
+import { Link } from 'react-router-dom'
 
 const SLOTS = ['desayuno', 'almuerzo', 'merienda', 'cena']
 const ESTADOS = ['cumplida', 'con_cambios', 'no_cumplida', 'omitida']
@@ -283,7 +284,9 @@ async function cargarHoy() {
   )}
 </div>
           {loading ? <p>Cargando...</p> : comidas.length === 0 ? (
-            <p style={{ color: '#888' }}>No hay comidas planificadas para hoy. Cargalas en <a href="/plan">Plan semanal</a>.</p>
+            
+
+<p style={{ color: '#888' }}>No hay comidas planificadas para hoy. Cargalas en <Link to="/plan">Plan semanal</Link>.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {comidas.map(comida => {
