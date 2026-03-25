@@ -148,7 +148,7 @@ function App() {
     if (error) {
       setError(error.message)
     } else {
-      setMensaje('Cuenta creada. Ya podés ingresar.')
+      setMensaje('Cuenta creada. Revisá tu email y hacé click en el link de confirmación para poder ingresar.')
       setModo('login')
       setEmail('')
       setPassword('')
