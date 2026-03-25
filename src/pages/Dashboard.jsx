@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import * as XLSX from 'xlsx'
 
 const SLOTS = ['desayuno', 'almuerzo', 'merienda', 'cena']
 const ESTADOS = ['cumplida', 'con_cambios', 'no_cumplida', 'omitida']
@@ -26,16 +27,12 @@ function formatSemana(lunesDate) {
 
 export default function Dashboard({ session }) {
   const [vista, setVista] = useState('hoy')
-
-  // ── Estado Hoy ──
   const [comidas, setComidas] = useState([])
   const [logs, setLogs] = useState({})
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
   const [form, setForm] = useState({ status: '', actual_meal: '', exception_type: '', notes: '' })
   const [saving, setSaving] = useState(false)
-
-  // ── Estado Reportes ──
   const [reporteVista, setReporteVista] = useState('adherencia')
   const [semanaReporte, setSemanaReporte] = useState(getLunes(new Date()))
   const [adherenciaSemanal, setAdherenciaSemanal] = useState(null)
@@ -54,7 +51,6 @@ export default function Dashboard({ session }) {
   useEffect(() => { if (vista === 'reportes') cargarReportes() }, [vista, semanaReporte, reporteVista])
   useEffect(() => { if (reporteVista === 'cargas' && ejercicioSeleccionado) cargarEvolucion() }, [ejercicioSeleccionado])
 
-  // ── Carga Hoy ──
   async function cargarHoy() {
     setLoading(true)
     const fechaLunes = formatFecha(lunes)
@@ -75,7 +71,6 @@ export default function Dashboard({ session }) {
     setLoading(false)
   }
 
-  // ── Carga Reportes ──
   async function cargarReportes() {
     setLoadingReporte(true)
     if (reporteVista === 'adherencia') await cargarAdherencia()
@@ -90,14 +85,10 @@ export default function Dashboard({ session }) {
     const { data: planes } = await supabase.from('meal_plans').select('*').eq('week_start', fecha)
     const plan = planes?.[0]
     if (!plan) { setAdherenciaSemanal(null); return }
-
     const { data: meals } = await supabase.from('planned_meals').select('*').eq('plan_id', plan.id)
     if (!meals?.length) { setAdherenciaSemanal(null); return }
-
     const ids = meals.map(m => m.id)
     const { data: logsData } = await supabase.from('meal_logs').select('*').in('planned_meal_id', ids)
-
-    // Agrupar por día
     const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
     const porDia = DIAS.map((nombre, i) => {
       const comidasDia = meals.filter(m => m.day_of_week === i)
@@ -105,30 +96,23 @@ export default function Dashboard({ session }) {
       const cumplidas = logsDia.filter(l => l.status === 'cumplida' || l.status === 'con_cambios').length
       return { dia: nombre, cumplidas, total: comidasDia.length, pct: comidasDia.length > 0 ? Math.round((cumplidas / comidasDia.length) * 100) : 0 }
     })
-
     const totalCumplidas = logsData?.filter(l => l.status === 'cumplida' || l.status === 'con_cambios').length || 0
     const totalComidas = meals.length
     setAdherenciaSemanal({ porDia, totalCumplidas, totalComidas, pct: totalComidas > 0 ? Math.round((totalCumplidas / totalComidas) * 100) : 0 })
   }
 
   async function cargarExcepciones() {
-    // Últimas 4 semanas
     const desde = new Date(semanaReporte)
     desde.setDate(desde.getDate() - 21)
     const { data: planes } = await supabase.from('meal_plans').select('*').gte('week_start', formatFecha(desde)).lte('week_start', formatFecha(semanaReporte))
     if (!planes?.length) { setExcepcionesFrecuentes([]); return }
-
     const ids = planes.map(p => p.id)
     const { data: meals } = await supabase.from('planned_meals').select('*').in('plan_id', ids)
     if (!meals?.length) { setExcepcionesFrecuentes([]); return }
-
     const mealIds = meals.map(m => m.id)
     const { data: logsData } = await supabase.from('meal_logs').select('*').in('planned_meal_id', mealIds).not('exception_type', 'is', null)
-
     const conteo = {}
-    logsData?.forEach(l => {
-      if (l.exception_type) conteo[l.exception_type] = (conteo[l.exception_type] || 0) + 1
-    })
+    logsData?.forEach(l => { if (l.exception_type) conteo[l.exception_type] = (conteo[l.exception_type] || 0) + 1 })
     const sorted = Object.entries(conteo).map(([nombre, cantidad]) => ({ nombre, cantidad })).sort((a, b) => b.cantidad - a.cantidad)
     setExcepcionesFrecuentes(sorted)
   }
@@ -138,15 +122,11 @@ export default function Dashboard({ session }) {
     const { data: planes } = await supabase.from('meal_plans').select('*').eq('week_start', fecha)
     const plan = planes?.[0]
     if (!plan) { setViandasResumen([]); return }
-
     const { data: meals } = await supabase.from('planned_meals').select('*').eq('plan_id', plan.id).eq('is_vianda', true)
     if (!meals?.length) { setViandasResumen([]); return }
-
     const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
     const resumen = meals.map(m => ({
-      dia: DIAS[m.day_of_week],
-      slot: m.slot,
-      descripcion: m.description
+      dia: DIAS[m.day_of_week], slot: m.slot, descripcion: m.description
     })).sort((a, b) => {
       const dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
       return dias.indexOf(a.dia) - dias.indexOf(b.dia)
@@ -155,41 +135,28 @@ export default function Dashboard({ session }) {
   }
 
   async function cargarEjercicios() {
-    const { data } = await supabase.from('gym_exercises').select('exercise_name').eq('log_id', supabase.auth.user?.id)
-    const { data: ejs } = await supabase.from('gym_exercises')
-      .select('exercise_name, gym_logs(date, user_id)')
-      .eq('gym_logs.user_id', session.user.id)
-
-    // Query directa: todos los ejercicios del usuario
-    const { data: todos } = await supabase.from('gym_logs')
-      .select('id').eq('user_id', session.user.id)
-
+    const { data: todos } = await supabase.from('gym_logs').select('id').eq('user_id', session.user.id)
     if (!todos?.length) { setEjerciciosDisponibles([]); return }
     const logIds = todos.map(l => l.id)
     const { data: ejercicios } = await supabase.from('gym_exercises').select('exercise_name').in('log_id', logIds)
-
     const unicos = [...new Set(ejercicios?.map(e => e.exercise_name) || [])].sort()
     setEjerciciosDisponibles(unicos)
     if (unicos.length && !ejercicioSeleccionado) setEjercicioSeleccionado(unicos[0])
   }
 
   async function cargarEvolucion() {
-    const { data: logs } = await supabase.from('gym_logs').select('id, date').eq('user_id', session.user.id).order('date')
-    if (!logs?.length) { setEvolucionCargas([]); return }
-    const logIds = logs.map(l => l.id)
+    const { data: gymLogs } = await supabase.from('gym_logs').select('id, date').eq('user_id', session.user.id).order('date')
+    if (!gymLogs?.length) { setEvolucionCargas([]); return }
+    const logIds = gymLogs.map(l => l.id)
     const { data: ejs } = await supabase.from('gym_exercises').select('*').in('log_id', logIds).eq('exercise_name', ejercicioSeleccionado)
     if (!ejs?.length) { setEvolucionCargas([]); return }
-
     const evolucion = ejs.map(ej => {
-      const sesion = logs.find(l => l.id === ej.log_id)
+      const sesion = gymLogs.find(l => l.id === ej.log_id)
       return {
         fecha: new Date(sesion.date + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }),
-        kg: ej.weight_kg || 0,
-        series: ej.sets || 0,
-        reps: ej.reps || 0
+        kg: ej.weight_kg || 0, series: ej.sets || 0, reps: ej.reps || 0
       }
     }).filter(e => e.kg > 0)
-
     setEvolucionCargas(evolucion)
   }
 
@@ -212,6 +179,47 @@ export default function Dashboard({ session }) {
     setModal(null)
   }
 
+  function exportarExcel() {
+    const wb = XLSX.utils.book_new()
+
+    // Hoja 1: Adherencia
+    if (adherenciaSemanal) {
+      const DIAS_FULL = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+      const filas = adherenciaSemanal.porDia.map((d, i) => ({
+        Día: DIAS_FULL[i],
+        'Comidas planificadas': d.total,
+        'Comidas cumplidas': d.cumplidas,
+        'Adherencia (%)': d.total > 0 ? d.pct : '—'
+      }))
+      filas.push({ Día: 'TOTAL', 'Comidas planificadas': adherenciaSemanal.totalComidas, 'Comidas cumplidas': adherenciaSemanal.totalCumplidas, 'Adherencia (%)': adherenciaSemanal.pct })
+      const ws1 = XLSX.utils.json_to_sheet(filas)
+      ws1['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 20 }, { wch: 16 }]
+      XLSX.utils.book_append_sheet(wb, ws1, 'Adherencia')
+    }
+
+    // Hoja 2: Viandas
+    if (viandasResumen.length > 0) {
+      const filas = viandasResumen.map(v => ({ Día: v.dia, Slot: v.slot, Descripción: v.descripcion }))
+      const ws2 = XLSX.utils.json_to_sheet(filas)
+      ws2['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 40 }]
+      XLSX.utils.book_append_sheet(wb, ws2, 'Viandas')
+    }
+
+    // Hoja 3: Cargas
+    if (evolucionCargas.length > 0) {
+      const filas = evolucionCargas.map(e => ({
+        Fecha: e.fecha, Ejercicio: ejercicioSeleccionado,
+        Series: e.series || '—', Reps: e.reps || '—', 'Peso (kg)': e.kg
+      }))
+      const ws3 = XLSX.utils.json_to_sheet(filas)
+      ws3['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 8 }, { wch: 8 }, { wch: 10 }]
+      XLSX.utils.book_append_sheet(wb, ws3, 'Cargas')
+    }
+
+    const semanaStr = formatSemana(semanaReporte).replace(' — ', '_')
+    XLSX.writeFile(wb, `NutriGym_${semanaStr}.xlsx`)
+  }
+
   const cumplidas = Object.values(logs).filter(l => l.status === 'cumplida' || l.status === 'con_cambios').length
   const total = comidas.length
   const adherencia = total > 0 ? Math.round((cumplidas / total) * 100) : 0
@@ -224,7 +232,6 @@ export default function Dashboard({ session }) {
 
   return (
     <div>
-      {/* ── Tabs principales ── */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
         <button onClick={() => setVista('hoy')} style={tabStyle(vista === 'hoy')}>Hoy</button>
         <button onClick={() => setVista('reportes')} style={tabStyle(vista === 'reportes')}>Reportes</button>
@@ -246,7 +253,6 @@ export default function Dashboard({ session }) {
               </div>
             )}
           </div>
-
           {loading ? <p>Cargando...</p> : comidas.length === 0 ? (
             <p style={{ color: '#888' }}>No hay comidas planificadas para hoy. Cargalas en <a href="/plan">Plan semanal</a>.</p>
           ) : (
@@ -283,9 +289,17 @@ export default function Dashboard({ session }) {
       {/* ══════════════ VISTA REPORTES ══════════════ */}
       {vista === 'reportes' && (
         <div>
-          <h2 style={{ marginTop: 0, marginBottom: '1rem' }}>Reportes</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <h2 style={{ margin: 0 }}>Reportes</h2>
+            <button onClick={exportarExcel} style={{
+              background: '#148F77', color: 'white', border: 'none',
+              padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}>
+              ⬇ Exportar Excel
+            </button>
+          </div>
 
-          {/* Sub-tabs */}
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
             {[['adherencia', 'Adherencia'], ['viandas', 'Viandas'], ['cargas', 'Cargas']].map(([key, label]) => (
               <button key={key} onClick={() => setReporteVista(key)} style={{
@@ -296,7 +310,6 @@ export default function Dashboard({ session }) {
             ))}
           </div>
 
-          {/* Selector de semana (adherencia y viandas) */}
           {(reporteVista === 'adherencia' || reporteVista === 'viandas') && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
               <button onClick={() => { const d = new Date(semanaReporte); d.setDate(d.getDate() - 7); setSemanaReporte(d) }}
@@ -316,7 +329,6 @@ export default function Dashboard({ session }) {
                     <p style={{ color: '#888' }}>No hay datos para esta semana.</p>
                   ) : (
                     <>
-                      {/* Resumen global */}
                       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
                         <div style={{ flex: 1, minWidth: '140px', background: '#f0f9f6', border: '1px solid #148F77', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
                           <div style={{ fontSize: '2rem', fontWeight: 'bold', color: adherenciaSemanal.pct >= 75 ? '#148F77' : adherenciaSemanal.pct >= 50 ? '#D4AC0D' : '#C0392B' }}>
@@ -326,8 +338,6 @@ export default function Dashboard({ session }) {
                           <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.25rem' }}>{adherenciaSemanal.totalCumplidas}/{adherenciaSemanal.totalComidas} comidas</div>
                         </div>
                       </div>
-
-                      {/* Gráfico de barras por día */}
                       <h4 style={{ margin: '0 0 0.75rem' }}>Adherencia por día</h4>
                       <ResponsiveContainer width="100%" height={200}>
                         <BarChart data={adherenciaSemanal.porDia} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
@@ -338,8 +348,6 @@ export default function Dashboard({ session }) {
                           <Bar dataKey="pct" fill="#1A5276" radius={[4, 4, 0, 0]} name="Adherencia" />
                         </BarChart>
                       </ResponsiveContainer>
-
-                      {/* Tabla por día */}
                       <h4 style={{ margin: '1.25rem 0 0.75rem' }}>Detalle por día</h4>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                         {adherenciaSemanal.porDia.map(d => (
@@ -386,7 +394,7 @@ export default function Dashboard({ session }) {
                 </div>
               )}
 
-              {/* ── Evolución de cargas ── */}
+              {/* ── Cargas ── */}
               {reporteVista === 'cargas' && (
                 <div>
                   {ejerciciosDisponibles.length === 0 ? (
@@ -400,18 +408,14 @@ export default function Dashboard({ session }) {
                           {ejerciciosDisponibles.map(e => <option key={e} value={e}>{e}</option>)}
                         </select>
                       </div>
-
                       {evolucionCargas.length === 0 ? (
                         <p style={{ color: '#888' }}>No hay registros de peso para este ejercicio.</p>
                       ) : (
                         <>
-                          {/* Máximo histórico */}
                           <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', background: '#f0f9f6', borderRadius: '8px', border: '1px solid #148F77', display: 'inline-block' }}>
                             <span style={{ fontSize: '0.8rem', color: '#555' }}>Máximo registrado </span>
                             <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#148F77' }}>{Math.max(...evolucionCargas.map(e => e.kg))} kg</span>
                           </div>
-
-                          {/* Gráfico de línea */}
                           <h4 style={{ margin: '0.5rem 0 0.75rem' }}>Evolución de carga (kg)</h4>
                           <ResponsiveContainer width="100%" height={220}>
                             <LineChart data={evolucionCargas} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
@@ -422,8 +426,6 @@ export default function Dashboard({ session }) {
                               <Line type="monotone" dataKey="kg" stroke="#148F77" strokeWidth={2} dot={{ r: 4, fill: '#148F77' }} name="Peso (kg)" />
                             </LineChart>
                           </ResponsiveContainer>
-
-                          {/* Tabla histórica */}
                           <h4 style={{ margin: '1.25rem 0 0.75rem' }}>Historial</h4>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                             {[...evolucionCargas].reverse().map((e, i) => (
