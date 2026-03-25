@@ -29,10 +29,8 @@ function Navbar({ onLogout }) {
   const menuRef = useRef(null)
   const location = useLocation()
 
-  // Cerrar menú al cambiar de ruta
   useEffect(() => { setMenuOpen(false) }, [location.pathname])
 
-  // Cerrar menú al hacer click fuera
   useEffect(() => {
     if (!menuOpen) return
     function handler(e) {
@@ -47,14 +45,10 @@ function Navbar({ onLogout }) {
       <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.1rem' }}>NutriGym Tracker</span>
 
       {isMobile ? (
-        /* ── MOBILE: hamburger ── */
         <>
-          <button
-            onClick={() => setMenuOpen(o => !o)}
+          <button onClick={() => setMenuOpen(o => !o)}
             style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', flexDirection: 'column', gap: '5px' }}
-            aria-label="Menú"
-          >
-            {/* 3 líneas del hamburger, se transforman en X cuando está abierto */}
+            aria-label="Menú">
             {[0, 1, 2].map(i => (
               <span key={i} style={{
                 display: 'block', width: '22px', height: '2px', background: 'white', borderRadius: '2px',
@@ -70,17 +64,11 @@ function Navbar({ onLogout }) {
           </button>
 
           {menuOpen && (
-            <div style={{
-              position: 'absolute', top: '100%', left: 0, right: 0,
-              background: '#154360', display: 'flex', flexDirection: 'column',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-            }}>
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#154360', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
               {LINKS.map(([path, label]) => (
                 <NavLink key={path} to={path} end style={({ isActive }) => ({
-                  color: isActive ? '#A9CCE3' : 'white',
-                  textDecoration: 'none',
-                  padding: '0.9rem 1.5rem',
-                  fontSize: '1rem',
+                  color: isActive ? '#A9CCE3' : 'white', textDecoration: 'none',
+                  padding: '0.9rem 1.5rem', fontSize: '1rem',
                   borderBottom: '1px solid rgba(255,255,255,0.08)',
                   background: isActive ? 'rgba(169,204,227,0.1)' : 'transparent'
                 })}>
@@ -98,7 +86,6 @@ function Navbar({ onLogout }) {
           )}
         </>
       ) : (
-        /* ── DESKTOP: links horizontales ── */
         <>
           <div style={{ display: 'flex', gap: '1rem' }}>
             {LINKS.map(([path, label]) => (
@@ -120,22 +107,53 @@ function Navbar({ onLogout }) {
 
 function App() {
   const [session, setSession] = useState(null)
+  const [modo, setModo] = useState('login') // 'login' | 'registro'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [mensaje, setMensaje] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
     supabase.auth.onAuthStateChange((_e, session) => setSession(session))
   }, [])
 
+  function cambiarModo(nuevoModo) {
+    setModo(nuevoModo)
+    setError('')
+    setMensaje('')
+    setEmail('')
+    setPassword('')
+    setPasswordConfirm('')
+  }
+
   async function handleLogin(e) {
     e.preventDefault()
     setLoading(true)
     setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) setError(error.message)
+    if (error) setError('Email o contraseña incorrectos.')
+    setLoading(false)
+  }
+
+  async function handleRegistro(e) {
+    e.preventDefault()
+    setError('')
+    if (password !== passwordConfirm) { setError('Las contraseñas no coinciden.'); return }
+    if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return }
+    setLoading(true)
+    const { error } = await supabase.auth.signUp({ email, password })
+    if (error) {
+      setError(error.message)
+    } else {
+      setMensaje('Cuenta creada. Ya podés ingresar.')
+      setModo('login')
+      setEmail('')
+      setPassword('')
+      setPasswordConfirm('')
+    }
     setLoading(false)
   }
 
@@ -143,25 +161,60 @@ function App() {
     await supabase.auth.signOut()
   }
 
+  const inp = { width: '100%', padding: '0.5rem', marginTop: '0.25rem', boxSizing: 'border-box', border: '1px solid #ccc', borderRadius: '4px' }
+
   if (!session) return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '400px', margin: '0 auto' }}>
-      <h1>NutriGym Tracker</h1>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <form onSubmit={handleLogin}>
-        <div style={{ marginBottom: '1rem' }}>
-          <label>Email</label><br />
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-            style={{ width: '100%', padding: '0.5rem', marginTop: '0.25rem', boxSizing: 'border-box' }} />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label>Contraseña</label><br />
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-            style={{ width: '100%', padding: '0.5rem', marginTop: '0.25rem', boxSizing: 'border-box' }} />
-        </div>
-        <button type="submit" disabled={loading}>
-          {loading ? 'Cargando...' : 'Entrar'}
-        </button>
-      </form>
+      <h1 style={{ marginBottom: '0.25rem' }}>NutriGym Tracker</h1>
+
+      {/* Toggle login / registro */}
+      <div style={{ display: 'flex', marginBottom: '1.5rem', borderRadius: '6px', overflow: 'hidden', border: '1px solid #ddd' }}>
+        {[['login', 'Ingresar'], ['registro', 'Crear cuenta']].map(([m, label]) => (
+          <button key={m} onClick={() => cambiarModo(m)} style={{
+            flex: 1, padding: '0.5rem', border: 'none', cursor: 'pointer',
+            background: modo === m ? '#1A5276' : 'white',
+            color: modo === m ? 'white' : '#555',
+            fontWeight: modo === m ? 600 : 400, fontSize: '0.9rem'
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {error && <p style={{ color: '#C0392B', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</p>}
+      {mensaje && <p style={{ color: '#148F77', marginBottom: '1rem', fontSize: '0.9rem' }}>{mensaje}</p>}
+
+      {modo === 'login' ? (
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={inp} required />
+          </div>
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label>Contraseña</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inp} required />
+          </div>
+          <button type="submit" disabled={loading} style={{ width: '100%', padding: '0.6rem', background: '#1A5276', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' }}>
+            {loading ? 'Cargando...' : 'Ingresar'}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleRegistro}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={inp} required />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label>Contraseña</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inp} required />
+          </div>
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label>Confirmar contraseña</label>
+            <input type="password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} style={inp} required />
+          </div>
+          <button type="submit" disabled={loading} style={{ width: '100%', padding: '0.6rem', background: '#148F77', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' }}>
+            {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+          </button>
+        </form>
+      )}
     </div>
   )
 
