@@ -185,7 +185,7 @@ export default function PlanSemanal({ session }) {
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      const wb = XLSX.read(ev.target.result, { type: 'array' })
+      const wb = XLSX.read(ev.target.result, { type: 'array', codepage: 65001 })
       const semanas = parsearExcel(wb)
       if (!semanas.length) {
         alert('No se encontraron semanas en el archivo. Verificá el formato.')
