@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NutriGym Tracker</string>
+    <string name="title_activity_main">NutriGym Tracker</string>
+    <string name="package_name">com.oso.nutrigym</string>
+    <string name="custom_url_scheme">com.oso.nutrigym</string>
+</resources>
