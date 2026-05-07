@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
-const RUTINAS = ['Tren Inferior + Core', 'Full Body Funcional', 'Tren Superior + Core', 'Intermitente Fútbol', 'Recuperación Activa', 'Partido Futsal', 'Otra']
+const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
 
 const C = {
   bg: '#0F1117', surface: '#1A1D27', surfaceHigh: '#22263A',
