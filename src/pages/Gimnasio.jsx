@@ -3,6 +3,14 @@ import { supabase } from '../supabase'
 
 const RUTINAS = ['Tren Inferior + Core', 'Full Body Funcional', 'Tren Superior + Core', 'Intermitente Fútbol', 'Recuperación Activa', 'Partido Futsal', 'Otra']
 
+const C = {
+  bg: '#0F1117', surface: '#1A1D27', surfaceHigh: '#22263A',
+  border: '#2A2D3E', accent: '#10B981', accentDim: '#10B98118',
+  accentText: '#34D399', blue: '#3B82F6', blueDim: '#3B82F618',
+  red: '#EF4444', redDim: '#EF444418', yellow: '#F59E0B',
+  textPrimary: '#F1F5F9', textSecondary: '#94A3B8', textMuted: '#4B5563',
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
   useEffect(() => {
@@ -55,43 +63,26 @@ export default function Gimnasio({ session }) {
       const { data } = await supabase.from('gym_logs').insert({ ...formSesion, user_id: session.user.id, date: hoy }).select()
       setSesionHoy(data?.[0])
     }
-    await cargarHoy()
-    await cargarHistorial()
-    setSaving(false)
+    await cargarHoy(); await cargarHistorial(); setSaving(false)
   }
 
   async function cargarPlantilla() {
     if (!sesionHoy) { alert('Primero creá la sesión.'); return }
-    if (ejercicios.length > 0 && !confirm('Ya tenés ejercicios cargados. ¿Reemplazarlos con la plantilla?')) return
+    if (ejercicios.length > 0 && !confirm('¿Reemplazar ejercicios con la plantilla?')) return
     setCargandoPlantilla(true)
-    const { data: plantilla } = await supabase.from('routine_templates').select('*')
-      .eq('user_id', session.user.id).eq('routine_type', formSesion.routine_type).order('sort_order')
+    const { data: plantilla } = await supabase.from('routine_templates').select('*').eq('user_id', session.user.id).eq('routine_type', formSesion.routine_type).order('sort_order')
     if (!plantilla?.length) { alert('No hay plantilla para este tipo de rutina.'); setCargandoPlantilla(false); return }
     if (ejercicios.length > 0) await supabase.from('gym_exercises').delete().eq('log_id', sesionHoy.id)
-    const nuevos = plantilla.map(p => ({
-      log_id: sesionHoy.id, exercise_name: p.exercise_name,
-      sets: p.default_sets, reps: p.default_reps, weight_kg: p.default_weight_kg, rir: null, notes: ''
-    }))
-    await supabase.from('gym_exercises').insert(nuevos)
-    await cargarHoy()
-    setCargandoPlantilla(false)
+    await supabase.from('gym_exercises').insert(plantilla.map(p => ({ log_id: sesionHoy.id, exercise_name: p.exercise_name, sets: p.default_sets, reps: p.default_reps, weight_kg: p.default_weight_kg, rir: null, notes: '' })))
+    await cargarHoy(); setCargandoPlantilla(false)
   }
 
   async function guardarEjercicio() {
     setSaving(true)
-    const datos = {
-      ...formEj,
-      sets: Number(formEj.sets) || null, reps: Number(formEj.reps) || null,
-      weight_kg: Number(formEj.weight_kg) || null, rir: Number(formEj.rir) || null,
-      log_id: sesionHoy.id
-    }
-    if (modalEj === 'nuevo') {
-      await supabase.from('gym_exercises').insert(datos)
-    } else {
-      await supabase.from('gym_exercises').update(datos).eq('id', modalEj.id)
-    }
-    await cargarHoy(); await cargarHistorial()
-    setSaving(false); setModalEj(null)
+    const datos = { ...formEj, sets: Number(formEj.sets) || null, reps: Number(formEj.reps) || null, weight_kg: Number(formEj.weight_kg) || null, rir: Number(formEj.rir) || null, log_id: sesionHoy.id }
+    if (modalEj === 'nuevo') { await supabase.from('gym_exercises').insert(datos) }
+    else { await supabase.from('gym_exercises').update(datos).eq('id', modalEj.id) }
+    await cargarHoy(); await cargarHistorial(); setSaving(false); setModalEj(null)
   }
 
   async function eliminarEjercicio(id) {
@@ -110,143 +101,187 @@ export default function Gimnasio({ session }) {
     setModalEj(ej)
   }
 
-  const inp = { display: 'block', width: '100%', padding: '0.4rem', margin: '0.25rem 0 0.75rem', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }
+  const inp = {
+    display: 'block', width: '100%', padding: '10px 12px', margin: '6px 0 14px',
+    border: `1px solid ${C.border}`, borderRadius: '8px', boxSizing: 'border-box',
+    background: C.surfaceHigh, color: C.textPrimary, fontSize: '14px', outline: 'none',
+  }
 
-  // ── Tabla desktop ──
-  const tablaEjercicios = (
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-      <thead>
-        <tr style={{ background: '#1A5276', color: 'white' }}>
-          {['Ejercicio', 'Series', 'Reps', 'Kg', 'RIR', 'Notas', ''].map(h => (
-            <th key={h} style={{ padding: '0.5rem', textAlign: 'left', fontWeight: 500 }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {ejercicios.map((ej, i) => (
-          <tr key={ej.id} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white' }}>
-            <td style={{ padding: '0.5rem', fontWeight: 500 }}>{ej.exercise_name}</td>
-            <td style={{ padding: '0.5rem' }}>{ej.sets || '—'}</td>
-            <td style={{ padding: '0.5rem' }}>{ej.reps || '—'}</td>
-            <td style={{ padding: '0.5rem' }}>{ej.weight_kg || '—'}</td>
-            <td style={{ padding: '0.5rem' }}>{ej.rir ?? '—'}</td>
-            <td style={{ padding: '0.5rem', color: '#666', fontSize: '0.8rem' }}>{ej.notes || ''}</td>
-            <td style={{ padding: '0.5rem' }}>
-              <button onClick={() => abrirEditarEj(ej)} style={{ fontSize: '0.75rem', marginRight: '0.25rem', border: '1px solid #ccc', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer' }}>Editar</button>
-              <button onClick={() => eliminarEjercicio(ej.id)} style={{ fontSize: '0.75rem', border: '1px solid #C0392B', color: '#C0392B', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer', background: 'transparent' }}>✕</button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-
-  // ── Cards mobile ──
-  const cardsEjercicios = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-      {ejercicios.map(ej => (
-        <div key={ej.id} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '0.75rem 1rem', background: 'white' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-            <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{ej.exercise_name}</div>
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button onClick={() => abrirEditarEj(ej)} style={{ fontSize: '0.75rem', border: '1px solid #ccc', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer' }}>Editar</button>
-              <button onClick={() => eliminarEjercicio(ej.id)} style={{ fontSize: '0.75rem', border: '1px solid #C0392B', color: '#C0392B', padding: '0.15rem 0.5rem', borderRadius: '3px', cursor: 'pointer', background: 'transparent' }}>✕</button>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: '#444' }}>
-            {ej.sets && <span><strong>{ej.sets}</strong> series</span>}
-            {ej.reps && <span><strong>{ej.reps}</strong> reps</span>}
-            {ej.weight_kg && <span><strong>{ej.weight_kg}</strong> kg</span>}
-            {ej.rir != null && ej.rir !== '' && <span>RIR <strong>{ej.rir}</strong></span>}
-          </div>
-          {ej.notes && <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.4rem', fontStyle: 'italic' }}>{ej.notes}</div>}
-        </div>
-      ))}
-    </div>
+  const tabBtn = (key, label) => (
+    <button key={key} onClick={() => setVista(key)} style={{
+      padding: '8px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+      background: vista === key ? C.accent : C.surface,
+      color: vista === key ? '#fff' : C.textSecondary,
+      fontWeight: vista === key ? 700 : 400, fontSize: '14px', transition: 'all 0.15s',
+    }}>{label}</button>
   )
 
   return (
-    <div>
-      {/* Tabs Hoy / Historial */}
-      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
-        <button onClick={() => setVista('hoy')} style={{ padding: '0.4rem 1rem', borderRadius: '4px', border: 'none', cursor: 'pointer', background: vista === 'hoy' ? '#1A5276' : '#eee', color: vista === 'hoy' ? 'white' : '#333' }}>Hoy</button>
-        <button onClick={() => setVista('historial')} style={{ padding: '0.4rem 1rem', borderRadius: '4px', border: 'none', cursor: 'pointer', background: vista === 'historial' ? '#1A5276' : '#eee', color: vista === 'historial' ? 'white' : '#333' }}>Historial</button>
+    <div style={{ color: C.textPrimary }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem' }}>
+        {tabBtn('hoy', 'Hoy')}
+        {tabBtn('historial', 'Historial')}
       </div>
 
+      {/* ══ HOY ══ */}
       {vista === 'hoy' && (
         <div>
-          <h2 style={{ marginTop: 0 }}>Entrenamiento de hoy</h2>
+          <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '1rem' }}>Entrenamiento de hoy</div>
 
-          {/* Controles de sesión */}
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'flex-end' }}>
-            <div>
-              <label style={{ fontSize: '0.85rem' }}>Tipo de rutina</label>
-              <select value={formSesion.routine_type} onChange={e => setFormSesion({ ...formSesion, routine_type: e.target.value })}
-                style={{ display: 'block', padding: '0.4rem', border: '1px solid #ccc', borderRadius: '4px', marginTop: '0.25rem', width: isMobile ? '100%' : 'auto' }}>
-                <option value="">— seleccioná —</option>
-                {RUTINAS.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
+          {/* Card sesión */}
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
+            <div style={{ fontSize: '12px', color: C.textMuted, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Tipo de rutina</div>
+            <select value={formSesion.routine_type} onChange={e => setFormSesion({ ...formSesion, routine_type: e.target.value })}
+              style={{ ...inp, margin: '0 0 12px', background: C.surfaceHigh }}>
+              <option value="">— seleccioná —</option>
+              {RUTINAS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <div onClick={() => setFormSesion({ ...formSesion, completed: !formSesion.completed })}
+                  style={{
+                    width: '44px', height: '24px', borderRadius: '12px', position: 'relative', cursor: 'pointer',
+                    background: formSesion.completed ? C.accent : C.border, transition: 'background 0.2s',
+                  }}>
+                  <div style={{
+                    position: 'absolute', top: '3px', left: formSesion.completed ? '23px' : '3px',
+                    width: '18px', height: '18px', borderRadius: '50%', background: 'white',
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  }} />
+                </div>
+                <span style={{ fontSize: '13px', color: C.textSecondary }}>Sesión completada</span>
+              </label>
+              <button onClick={guardarSesion} disabled={saving} style={{
+                background: C.accent, color: 'white', border: 'none',
+                padding: '9px 20px', borderRadius: '8px', cursor: 'pointer',
+                fontWeight: 700, fontSize: '14px', opacity: saving ? 0.7 : 1,
+              }}>
+                {saving ? 'Guardando...' : sesionHoy ? 'Actualizar' : 'Crear sesión'}
+              </button>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
-              <input type="checkbox" checked={formSesion.completed} onChange={e => setFormSesion({ ...formSesion, completed: e.target.checked })} />
-              Sesión completada
-            </label>
-            <button onClick={guardarSesion} disabled={saving}
-              style={{ background: '#148F77', color: 'white', border: 'none', padding: '0.45rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
-              {saving ? 'Guardando...' : sesionHoy ? 'Actualizar' : 'Crear sesión'}
-            </button>
           </div>
 
+          {/* Ejercicios */}
           {sesionHoy && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <h3 style={{ margin: 0 }}>Ejercicios ({ejercicios.length})</h3>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ fontWeight: 600, fontSize: '15px' }}>
+                  Ejercicios <span style={{ color: C.textMuted, fontWeight: 400 }}>({ejercicios.length})</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
                   {formSesion.routine_type && (
-                    <button onClick={cargarPlantilla} disabled={cargandoPlantilla}
-                      style={{ background: '#D6EAF8', color: '#1A5276', border: '1px solid #AED6F1', padding: '0.4rem 0.9rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                      {cargandoPlantilla ? 'Cargando...' : '📋 Cargar plantilla'}
+                    <button onClick={cargarPlantilla} disabled={cargandoPlantilla} style={{
+                      background: C.blueDim, color: C.blue, border: `1px solid ${C.blue}40`,
+                      padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 500,
+                    }}>
+                      {cargandoPlantilla ? 'Cargando...' : '📋 Plantilla'}
                     </button>
                   )}
-                  <button onClick={abrirNuevoEj}
-                    style={{ background: '#1A5276', color: 'white', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '4px', cursor: 'pointer' }}>
-                    + Agregar
-                  </button>
+                  <button onClick={abrirNuevoEj} style={{
+                    background: C.accent, color: 'white', border: 'none',
+                    padding: '7px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '14px',
+                  }}>+ Agregar</button>
                 </div>
               </div>
 
               {ejercicios.length === 0 ? (
-                <p style={{ color: '#888' }}>
-                  Sin ejercicios todavía.
-                  {formSesion.routine_type && <span> Tocá <strong>Cargar plantilla</strong> para pre-cargar los ejercicios de {formSesion.routine_type}.</span>}
-                </p>
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>💪</div>
+                  <div style={{ color: C.textMuted, fontSize: '14px' }}>
+                    Sin ejercicios.{formSesion.routine_type && ' Tocá Plantilla para cargar los ejercicios.'}
+                  </div>
+                </div>
+              ) : isMobile ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {ejercicios.map(ej => (
+                    <div key={ej.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <div style={{ fontWeight: 600, fontSize: '14px', color: C.textPrimary }}>{ej.exercise_name}</div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button onClick={() => abrirEditarEj(ej)} style={{ fontSize: '12px', border: `1px solid ${C.border}`, padding: '3px 10px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', color: C.textSecondary }}>Editar</button>
+                          <button onClick={() => eliminarEjercicio(ej.id)} style={{ fontSize: '12px', border: `1px solid ${C.red}40`, color: C.red, padding: '3px 10px', borderRadius: '6px', cursor: 'pointer', background: 'transparent' }}>✕</button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        {ej.sets && <Pill label="Series" value={ej.sets} />}
+                        {ej.reps && <Pill label="Reps" value={ej.reps} />}
+                        {ej.weight_kg && <Pill label="Kg" value={ej.weight_kg} accent />}
+                        {ej.rir != null && ej.rir !== '' && <Pill label="RIR" value={ej.rir} />}
+                      </div>
+                      {ej.notes && <div style={{ fontSize: '12px', color: C.textMuted, marginTop: '8px', fontStyle: 'italic' }}>{ej.notes}</div>}
+                    </div>
+                  ))}
+                </div>
               ) : (
-                isMobile ? cardsEjercicios : tablaEjercicios
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                        {['Ejercicio', 'Series', 'Reps', 'Kg', 'RIR', 'Notas', ''].map(h => (
+                          <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: C.textMuted, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ejercicios.map((ej, i) => (
+                        <tr key={ej.id} style={{ borderBottom: i < ejercicios.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                          <td style={{ padding: '12px 14px', fontWeight: 600, color: C.textPrimary }}>{ej.exercise_name}</td>
+                          <td style={{ padding: '12px 14px', color: C.textSecondary }}>{ej.sets || '—'}</td>
+                          <td style={{ padding: '12px 14px', color: C.textSecondary }}>{ej.reps || '—'}</td>
+                          <td style={{ padding: '12px 14px', color: C.accentText, fontWeight: 600 }}>{ej.weight_kg ? `${ej.weight_kg} kg` : '—'}</td>
+                          <td style={{ padding: '12px 14px', color: C.textSecondary }}>{ej.rir ?? '—'}</td>
+                          <td style={{ padding: '12px 14px', color: C.textMuted, fontSize: '12px' }}>{ej.notes || ''}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={() => abrirEditarEj(ej)} style={{ fontSize: '12px', border: `1px solid ${C.border}`, padding: '3px 10px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', color: C.textSecondary }}>Editar</button>
+                              <button onClick={() => eliminarEjercicio(ej.id)} style={{ fontSize: '12px', border: `1px solid ${C.red}40`, color: C.red, padding: '3px 10px', borderRadius: '6px', cursor: 'pointer', background: 'transparent' }}>✕</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           )}
         </div>
       )}
 
+      {/* ══ HISTORIAL ══ */}
       {vista === 'historial' && (
         <div>
-          <h2 style={{ marginTop: 0 }}>Historial de entrenamientos</h2>
-          {sesiones.length === 0 ? <p style={{ color: '#888' }}>Sin entrenamientos registrados.</p> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '1rem' }}>Historial</div>
+          {sesiones.length === 0 ? (
+            <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>Sin entrenamientos registrados.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {sesiones.map(s => (
-                <div key={s.id} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                <div key={s.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
                     <div>
-                      <strong>{new Date(s.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
-                      {s.routine_type && <span style={{ marginLeft: '0.75rem', background: '#D6EAF8', color: '#1A5276', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem' }}>{s.routine_type}</span>}
+                      <div style={{ fontWeight: 700, fontSize: '14px', color: C.textPrimary }}>
+                        {new Date(s.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      </div>
+                      {s.routine_type && (
+                        <div style={{ fontSize: '12px', color: C.accentText, marginTop: '2px' }}>{s.routine_type}</div>
+                      )}
                     </div>
-                    <span style={{ color: s.completed ? '#148F77' : '#888', fontSize: '0.85rem' }}>{s.completed ? '✓ Completado' : 'No completado'}</span>
+                    <span style={{
+                      fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px',
+                      background: s.completed ? C.accentDim : C.surfaceHigh,
+                      color: s.completed ? C.accentText : C.textMuted,
+                      border: `1px solid ${s.completed ? C.accent + '40' : C.border}`,
+                    }}>
+                      {s.completed ? '✓ Completado' : 'Incompleto'}
+                    </span>
                   </div>
                   {s.gym_exercises?.length > 0 && (
-                    <div style={{ fontSize: '0.85rem', color: '#555' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
                       {s.gym_exercises.map(ej => (
-                        <span key={ej.id} style={{ display: 'inline-block', margin: '0.15rem 0.3rem 0.15rem 0', background: '#f0f0f0', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
-                          {ej.exercise_name} {ej.weight_kg ? `${ej.weight_kg}kg` : ''}
+                        <span key={ej.id} style={{ fontSize: '12px', background: C.surfaceHigh, color: C.textSecondary, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` }}>
+                          {ej.exercise_name}{ej.weight_kg ? ` · ${ej.weight_kg}kg` : ''}
                         </span>
                       ))}
                     </div>
@@ -258,46 +293,56 @@ export default function Gimnasio({ session }) {
         </div>
       )}
 
-      {/* Modal ejercicio */}
+      {/* ══ MODAL EJERCICIO ══ */}
       {modalEj && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', width: '90%', maxWidth: '440px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h3 style={{ marginTop: 0 }}>{modalEj === 'nuevo' ? 'Agregar ejercicio' : 'Editar ejercicio'}</h3>
-            <label>Ejercicio</label>
-            <input value={formEj.exercise_name} onChange={e => setFormEj({ ...formEj, exercise_name: e.target.value })} style={inp} placeholder="Ej: Sentadilla con barra" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              <div>
-                <label>Series</label>
-                <input type="number" value={formEj.sets} onChange={e => setFormEj({ ...formEj, sets: e.target.value })} style={inp} placeholder="4" />
-              </div>
-              <div>
-                <label>Reps</label>
-                <input type="number" value={formEj.reps} onChange={e => setFormEj({ ...formEj, reps: e.target.value })} style={inp} placeholder="8" />
-              </div>
-              <div>
-                <label>Peso (kg)</label>
-                <input type="number" value={formEj.weight_kg} onChange={e => setFormEj({ ...formEj, weight_kg: e.target.value })} style={inp} placeholder="80" />
-              </div>
-              <div>
-                <label>RIR</label>
-                <input type="number" min="0" max="4" value={formEj.rir} onChange={e => setFormEj({ ...formEj, rir: e.target.value })} style={inp} placeholder="2" />
-              </div>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: C.surface, borderRadius: '20px 20px 0 0', width: '100%', maxWidth: '480px', maxHeight: '85vh', overflowY: 'auto', padding: '1.5rem' }}>
+            <div style={{ width: '40px', height: '4px', background: C.border, borderRadius: '2px', margin: '0 auto 1.25rem' }} />
+            <div style={{ fontSize: '16px', fontWeight: 700, color: C.textPrimary, marginBottom: '1.25rem' }}>
+              {modalEj === 'nuevo' ? 'Agregar ejercicio' : 'Editar ejercicio'}
             </div>
-            <label>Observaciones</label>
-            <textarea value={formEj.notes} onChange={e => setFormEj({ ...formEj, notes: e.target.value })} style={{ ...inp, height: '55px', resize: 'vertical' }} />
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-              <button onClick={guardarEjercicio} disabled={saving || !formEj.exercise_name}
-                style={{ background: '#1A5276', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
+
+            <label style={{ fontSize: '12px', color: C.textMuted }}>Ejercicio</label>
+            <input value={formEj.exercise_name} onChange={e => setFormEj({ ...formEj, exercise_name: e.target.value })} style={inp} placeholder="Ej: Sentadilla con barra" />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              {[['sets', 'Series', '4'], ['reps', 'Reps', '8'], ['weight_kg', 'Peso (kg)', '80'], ['rir', 'RIR', '2']].map(([key, label, ph]) => (
+                <div key={key}>
+                  <label style={{ fontSize: '12px', color: C.textMuted }}>{label}</label>
+                  <input type="number" value={formEj[key]} onChange={e => setFormEj({ ...formEj, [key]: e.target.value })}
+                    style={inp} placeholder={ph} />
+                </div>
+              ))}
+            </div>
+
+            <label style={{ fontSize: '12px', color: C.textMuted }}>Observaciones</label>
+            <textarea value={formEj.notes} onChange={e => setFormEj({ ...formEj, notes: e.target.value })} style={{ ...inp, height: '60px', resize: 'vertical' }} />
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+              <button onClick={guardarEjercicio} disabled={saving || !formEj.exercise_name} style={{
+                flex: 1, background: C.accent, color: 'white', border: 'none',
+                padding: '13px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '15px',
+                opacity: saving || !formEj.exercise_name ? 0.5 : 1,
+              }}>
                 {saving ? 'Guardando...' : 'Guardar'}
               </button>
-              <button onClick={() => setModalEj(null)}
-                style={{ border: '1px solid #ccc', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
-                Cancelar
-              </button>
+              <button onClick={() => setModalEj(null)} style={{
+                padding: '13px 20px', border: `1px solid ${C.border}`, borderRadius: '10px',
+                cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px',
+              }}>Cancelar</button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function Pill({ label, value, accent }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: accent ? '#10B98118' : '#22263A', borderRadius: '8px', padding: '4px 12px', minWidth: '44px' }}>
+      <span style={{ fontSize: '14px', fontWeight: 700, color: accent ? '#34D399' : '#F1F5F9' }}>{value}</span>
+      <span style={{ fontSize: '10px', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
     </div>
   )
 }
