@@ -125,6 +125,14 @@ export default function PlanSemanal({ session }) {
   function semanaAnterior() { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d) }
   function semanaSiguiente() { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d) }
 
+  async function limpiarSemana() {
+    const existentes = Object.values(comidas)
+    if (!existentes.length) { alert('No hay comidas para eliminar.'); return }
+    if (!confirm(`¿Eliminar las ${existentes.length} comidas de esta semana? Esta acción no se puede deshacer.`)) return
+    await supabase.from('planned_meals').delete().in('id', existentes.map(c => c.id))
+    await cargarSemana()
+  }
+
   async function duplicarSemanaAnterior() {
     if (!confirm('¿Duplicar todas las comidas de la semana anterior?')) return
     const fechaAnterior = formatFecha(new Date(weekStart.getTime() - 7 * 86400000))
@@ -211,6 +219,9 @@ export default function PlanSemanal({ session }) {
           </button>
           <button onClick={descargarTemplate} style={{ background: 'transparent', color: C.textSecondary, border: `1px solid ${C.border}`, padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>
             ⬇ Template
+          </button>
+          <button onClick={limpiarSemana} style={{ background: '#EF444415', color: C.red, border: `1px solid ${C.red}40`, padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+            🗑 Limpiar semana
           </button>
           <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={onFileChange} />
         </div>

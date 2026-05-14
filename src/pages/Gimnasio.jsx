@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
-const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
+const RUTINAS = ['Tren Inferior + Core', 'Full Body Funcional', 'Tren Superior + Core', 'Intermitente Fútbol', 'Recuperación Activa', 'Partido Futsal', 'Otra']
 
 const C = {
   bg: '#0F1117', surface: '#1A1D27', surfaceHigh: '#22263A',
@@ -75,6 +75,13 @@ export default function Gimnasio({ session }) {
     if (ejercicios.length > 0) await supabase.from('gym_exercises').delete().eq('log_id', sesionHoy.id)
     await supabase.from('gym_exercises').insert(plantilla.map(p => ({ log_id: sesionHoy.id, exercise_name: p.exercise_name, sets: p.default_sets, reps: p.default_reps, weight_kg: p.default_weight_kg, rir: null, notes: '' })))
     await cargarHoy(); setCargandoPlantilla(false)
+  }
+
+  async function limpiarEjercicios() {
+    if (!ejercicios.length) { alert('No hay ejercicios para eliminar.'); return }
+    if (!confirm(`¿Eliminar los ${ejercicios.length} ejercicios de la sesión de hoy?`)) return
+    await supabase.from('gym_exercises').delete().eq('log_id', sesionHoy.id)
+    await cargarHoy()
   }
 
   async function guardarEjercicio() {
@@ -177,6 +184,12 @@ export default function Gimnasio({ session }) {
                     }}>
                       {cargandoPlantilla ? 'Cargando...' : '📋 Plantilla'}
                     </button>
+                  )}
+                  {ejercicios.length > 0 && (
+                    <button onClick={limpiarEjercicios} style={{
+                      background: '#EF444415', color: C.red, border: `1px solid ${C.red}40`,
+                      padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+                    }}>🗑 Limpiar</button>
                   )}
                   <button onClick={abrirNuevoEj} style={{
                     background: C.accent, color: 'white', border: 'none',
