@@ -1,7 +1,7 @@
 // src/services/geminiPlan.js
 // Servicio para generar el plan semanal con Gemini
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
 
 export async function generarPlanSemanal({ perfil, viandas, diaPartido, fechaSemana }) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY
@@ -125,8 +125,13 @@ No incluyas ningún texto fuera del JSON.`
 
   if (!texto) throw new Error('Gemini no devolvió respuesta')
 
-  // Limpiar posibles markdown fences
-  const limpio = texto.replace(/```json|```/g, '').trim()
+  // Intentar extraer JSON de la respuesta aunque venga con texto extra
+  let limpio = texto.trim()
+  limpio = limpio.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  const inicio = limpio.indexOf('{')
+  const fin = limpio.lastIndexOf('}')
+  if (inicio === -1 || fin === -1) throw new Error('No se encontró JSON en la respuesta de Gemini')
+  limpio = limpio.slice(inicio, fin + 1)
 
   try {
     const parsed = JSON.parse(limpio)
