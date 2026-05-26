@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import PlanSemanal from './pages/PlanSemanal'
 import Viandas from './pages/Viandas'
 import Gimnasio from './pages/Gimnasio'
+import Perfil from './pages/Perfil'
 
 // ── Íconos SVG inline ──────────────────────────────────────────────
 function IconDashboard({ active }) {
@@ -39,6 +40,14 @@ function IconGym({ active }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 4v16M18 4v16M3 8h3M18 8h3M3 16h3M18 16h3M6 12h12" />
+    </svg>
+  )
+}
+function IconPerfil({ active }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
     </svg>
   )
 }
@@ -77,6 +86,7 @@ const LINKS = [
   { path: '/plan', label: 'Plan', Icon: IconPlan },
   { path: '/viandas', label: 'Viandas', Icon: IconViandas },
   { path: '/gimnasio', label: 'Gym', Icon: IconGym },
+  { path: '/perfil', label: 'Perfil', Icon: IconPerfil },
 ]
 
 function BottomNav({ onLogout }) {
@@ -335,6 +345,7 @@ function AppLayout({ session, onLogout }) {
           <Route path="/plan" element={<PlanSemanal session={session} />} />
           <Route path="/viandas" element={<Viandas session={session} />} />
           <Route path="/gimnasio" element={<Gimnasio session={session} />} />
+          <Route path="/perfil" element={<Perfil session={session} />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>

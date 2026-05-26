@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 import * as XLSX from 'xlsx'
+import { generarPlanSemanal } from '../services/geminiPlan'
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 const SLOTS = ['desayuno', 'almuerzo', 'merienda', 'cena']
@@ -103,6 +104,10 @@ export default function PlanSemanal({ session }) {
   const [semanaElegida, setSemanaElegida] = useState(null)
   const [importando, setImportando] = useState(false)
   const [modalImport, setModalImport] = useState(false)
+  const [modalIA, setModalIA] = useState(false)
+  const [diaPartidoIA, setDiaPartidoIA] = useState('martes')
+  const [generando, setGenerando] = useState(false)
+  const [errorIA, setErrorIA] = useState('')
   const fileRef = useRef(null)
 
   useEffect(() => { cargarSemana() }, [weekStart])
@@ -124,6 +129,56 @@ export default function PlanSemanal({ session }) {
 
   function semanaAnterior() { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d) }
   function semanaSiguiente() { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d) }
+
+  async function generarConIA() {
+    setGenerando(true)
+    setErrorIA('')
+    try {
+      // Cargar perfil y viandas
+      const [{ data: perfilData }, { data: viandasData }] = await Promise.all([
+        supabase.from('user_profile').select('*').eq('user_id', session.user.id).single(),
+        supabase.from('viandas').select('*').eq('user_id', session.user.id).gt('portions', 0).order('name'),
+      ])
+
+      const plan = await generarPlanSemanal({
+        perfil: perfilData,
+        viandas: viandasData || [],
+        diaPartido: diaPartidoIA,
+        fechaSemana: formatFecha(weekStart),
+      })
+
+      // Borrar comidas existentes de la semana
+      const existentes = Object.values(comidas)
+      if (existentes.length > 0) {
+        await supabase.from('planned_meals').delete().in('id', existentes.map(c => c.id))
+      }
+
+      // Insertar el plan generado
+      const SLOT_MAP = { desayuno: 'desayuno', almuerzo: 'almuerzo', merienda: 'merienda', cena: 'cena' }
+      const nuevas = []
+      plan.forEach(diaObj => {
+        Object.keys(SLOT_MAP).forEach(slot => {
+          const desc = diaObj[slot]
+          if (desc && desc.trim()) {
+            nuevas.push({
+              plan_id: planId,
+              day_of_week: diaObj.dia,
+              slot,
+              description: desc.trim(),
+              is_vianda: slot === 'almuerzo',
+            })
+          }
+        })
+      })
+
+      if (nuevas.length > 0) await supabase.from('planned_meals').insert(nuevas)
+      await cargarSemana()
+      setModalIA(false)
+    } catch (err) {
+      setErrorIA(err.message || 'Error al generar el plan')
+    }
+    setGenerando(false)
+  }
 
   async function limpiarSemana() {
     const existentes = Object.values(comidas)
@@ -213,6 +268,9 @@ export default function PlanSemanal({ session }) {
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button onClick={duplicarSemanaAnterior} style={{ background: C.accentDim, color: C.accentText, border: `1px solid ${C.accent}40`, padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
             Duplicar semana anterior
+          </button>
+          <button onClick={() => { setModalIA(true); setErrorIA('') }} style={{ background: '#7C3AED18', color: '#A78BFA', border: '1px solid #7C3AED40', padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>
+            ✨ Generar con IA
           </button>
           <button onClick={() => fileRef.current.click()} style={{ background: C.blueDim, color: C.blue, border: `1px solid ${C.blue}40`, padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
             ⬆ Importar Excel
@@ -327,6 +385,70 @@ export default function PlanSemanal({ session }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── Modal IA ── */}
+      {modalIA && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: C.surface, borderRadius: '20px 20px 0 0', width: '100%', maxWidth: '480px', padding: '1.5rem' }}>
+            <div style={{ width: '40px', height: '4px', background: C.border, borderRadius: '2px', margin: '0 auto 1.25rem' }} />
+            <div style={{ fontSize: '18px', fontWeight: 800, color: '#A78BFA', marginBottom: '4px' }}>✨ Generar plan con IA</div>
+            <div style={{ fontSize: '13px', color: C.textSecondary, marginBottom: '1.25rem' }}>
+              Gemini va a generar el plan semanal completo usando tu perfil y el stock de viandas actual.
+            </div>
+
+            <div style={{ background: C.surfaceHigh, borderRadius: '10px', padding: '12px 14px', marginBottom: '1.25rem', fontSize: '12px', color: C.textMuted }}>
+              <div style={{ fontWeight: 600, color: C.textSecondary, marginBottom: '4px' }}>Semana a generar:</div>
+              <div style={{ color: C.textPrimary }}>{fechaLunes} — {fechaDomingo}</div>
+              <div style={{ color: '#F59E0B', marginTop: '4px', fontSize: '11px' }}>⚠ Esto reemplazará las comidas existentes de esta semana.</div>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ fontSize: '12px', color: C.textSecondary, display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+                ⚽ ¿Qué día jugás el partido esta semana?
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {['lunes', 'martes', 'miercoles', 'jueves', 'viernes'].map(dia => (
+                  <button key={dia} onClick={() => setDiaPartidoIA(dia)} style={{
+                    flex: 1, padding: '8px 4px', borderRadius: '8px', border: `1px solid ${diaPartidoIA === dia ? '#F59E0B' : C.border}`,
+                    background: diaPartidoIA === dia ? '#F59E0B18' : 'transparent',
+                    color: diaPartidoIA === dia ? '#F59E0B' : C.textMuted,
+                    cursor: 'pointer', fontSize: '11px', fontWeight: diaPartidoIA === dia ? 700 : 400,
+                  }}>
+                    {dia.slice(0, 3).charAt(0).toUpperCase() + dia.slice(1, 3)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {errorIA && (
+              <div style={{ background: '#EF444418', border: '1px solid #EF444440', borderRadius: '8px', padding: '10px 14px', marginBottom: '1rem', color: '#FCA5A5', fontSize: '13px' }}>
+                {errorIA}
+              </div>
+            )}
+
+            {generando && (
+              <div style={{ background: '#7C3AED15', border: '1px solid #7C3AED40', borderRadius: '8px', padding: '12px 14px', marginBottom: '1rem', color: '#A78BFA', fontSize: '13px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', marginBottom: '6px' }}>🤖</div>
+                Generando tu plan semanal... esto puede tardar unos segundos.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={generarConIA} disabled={generando} style={{
+                flex: 1, background: '#7C3AED', color: 'white', border: 'none',
+                padding: '13px', borderRadius: '10px', cursor: generando ? 'wait' : 'pointer',
+                fontWeight: 700, fontSize: '15px', opacity: generando ? 0.7 : 1,
+              }}>
+                {generando ? 'Generando...' : '✨ Generar plan'}
+              </button>
+              <button onClick={() => setModalIA(false)} disabled={generando} style={{
+                padding: '13px 20px', border: `1px solid ${C.border}`, borderRadius: '10px',
+                cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px',
+              }}>Cancelar</button>
+            </div>
+          </div>
         </div>
       )}
 
