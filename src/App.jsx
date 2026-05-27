@@ -6,6 +6,7 @@ import PlanSemanal from './pages/PlanSemanal'
 import Viandas from './pages/Viandas'
 import Gimnasio from './pages/Gimnasio'
 import Perfil from './pages/Perfil'
+import { programarNotificaciones } from './services/notifications'
 
 // ── Íconos SVG inline ──────────────────────────────────────────────
 function IconDashboard({ active }) {
@@ -359,7 +360,14 @@ function App() {
   const [session, setSession] = useState(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      if (session) {
+        // Programar notificaciones al iniciar sesión
+        supabase.from('user_profile').select('*').eq('user_id', session.user.id).single()
+          .then(({ data }) => { if (data) programarNotificaciones(data) })
+      }
+    })
     supabase.auth.onAuthStateChange((_e, session) => setSession(session))
   }, [])
 

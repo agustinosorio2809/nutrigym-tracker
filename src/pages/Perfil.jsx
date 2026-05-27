@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { programarNotificaciones } from '../services/notifications'
 
 const C = {
   bg: '#0F1117', surface: '#1A1D27', surfaceHigh: '#22263A',
@@ -25,6 +26,12 @@ export default function Perfil({ session }) {
     dia_partido: 'martes',
     restricciones: 'No consumo acelga, atún, zapallitos. Los huevos solo en formato omelette.',
     notas_extra: '',
+    notif_almuerzo_activa: true,
+    notif_almuerzo_hora: '13:30',
+    notif_cena_activa: true,
+    notif_cena_hora: '21:30',
+    notif_gym_activa: true,
+    notif_gym_hora: '11:30',
   })
 
   useEffect(() => { cargarPerfil() }, [])
@@ -46,6 +53,12 @@ export default function Perfil({ session }) {
         dia_partido: data.dia_partido || 'martes',
         restricciones: data.restricciones || '',
         notas_extra: data.notas_extra || '',
+        notif_almuerzo_activa: data.notif_almuerzo_activa ?? true,
+        notif_almuerzo_hora: data.notif_almuerzo_hora || '13:30',
+        notif_cena_activa: data.notif_cena_activa ?? true,
+        notif_cena_hora: data.notif_cena_hora || '21:30',
+        notif_gym_activa: data.notif_gym_activa ?? true,
+        notif_gym_hora: data.notif_gym_hora || '11:30',
       })
     }
     setLoading(false)
@@ -60,6 +73,7 @@ export default function Perfil({ session }) {
       await supabase.from('user_profile').insert(datos)
     }
     await cargarPerfil()
+    await programarNotificaciones({ ...form, user_id: session.user.id })
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
@@ -167,6 +181,43 @@ export default function Perfil({ session }) {
           <textarea value={form.notas_extra} onChange={e => setForm({ ...form, notas_extra: e.target.value })}
             style={{ ...inp, height: '70px', resize: 'vertical', marginTop: '6px' }}
             placeholder="Ej: Prefiero cenas livianas, no me gustan las legumbres..." />
+        </div>
+      </Section>
+
+      {/* Notificaciones */}
+      <Section title="Notificaciones" icon="🔔">
+        {[
+          { key: 'almuerzo', label: 'Recordatorio almuerzo', emoji: '🍽️', activaKey: 'notif_almuerzo_activa', horaKey: 'notif_almuerzo_hora' },
+          { key: 'cena', label: 'Recordatorio cena', emoji: '🌙', activaKey: 'notif_cena_activa', horaKey: 'notif_cena_hora' },
+          { key: 'gym', label: 'Recordatorio gym', emoji: '💪', activaKey: 'notif_gym_activa', horaKey: 'notif_gym_hora' },
+        ].map(({ key, label, emoji, activaKey, horaKey }) => (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div onClick={() => setForm({ ...form, [activaKey]: !form[activaKey] })}
+                style={{
+                  width: '44px', height: '24px', borderRadius: '12px', position: 'relative', cursor: 'pointer',
+                  background: form[activaKey] ? C.accent : C.border, transition: 'background 0.2s', flexShrink: 0,
+                }}>
+                <div style={{
+                  position: 'absolute', top: '3px', left: form[activaKey] ? '23px' : '3px',
+                  width: '18px', height: '18px', borderRadius: '50%', background: 'white',
+                  transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                }} />
+              </div>
+              <span style={{ fontSize: '13px', color: form[activaKey] ? C.textPrimary : C.textMuted }}>
+                {emoji} {label}
+              </span>
+            </div>
+            <input type="time" value={form[horaKey]} onChange={e => setForm({ ...form, [horaKey]: e.target.value })}
+              disabled={!form[activaKey]} style={{
+                padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: '8px',
+                background: C.surfaceHigh, color: form[activaKey] ? C.textPrimary : C.textMuted,
+                fontSize: '14px', outline: 'none', opacity: form[activaKey] ? 1 : 0.4,
+              }} />
+          </div>
+        ))}
+        <div style={{ fontSize: '11px', color: C.textMuted, marginTop: '4px' }}>
+          Las notificaciones se programan al guardar. Solo funcionan en la app del teléfono.
         </div>
       </Section>
 
