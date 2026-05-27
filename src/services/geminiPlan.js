@@ -1,7 +1,7 @@
 // src/services/geminiPlan.js
 // Servicio para generar el plan semanal con Gemini
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
 
 export async function generarPlanSemanal({ perfil, viandas, diaPartido, fechaSemana }) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY
@@ -40,7 +40,7 @@ Perfil mesomorfo, con buena base muscular pero grasa localizada en abdomen.
 
 Nivel de actividad:
 • Entreno gimnasio los días: ${diasEntreno.join(', ')}
-• Juego futsal semanalmente — el partido de esta semana es el ${diaPartido}
+• Juego futsal semanalmente — el partido de esta semana es el ${diaPartido === 'ninguno' ? 'no hay partido esta semana' : diaPartido}
 • Promedio diario de pasos: 12.000 – 15.000
 • Siempre entreno antes del almuerzo
 
@@ -125,13 +125,8 @@ No incluyas ningún texto fuera del JSON.`
 
   if (!texto) throw new Error('Gemini no devolvió respuesta')
 
-  // Intentar extraer JSON de la respuesta aunque venga con texto extra
-  let limpio = texto.trim()
-  limpio = limpio.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
-  const inicio = limpio.indexOf('{')
-  const fin = limpio.lastIndexOf('}')
-  if (inicio === -1 || fin === -1) throw new Error('No se encontró JSON en la respuesta de Gemini')
-  limpio = limpio.slice(inicio, fin + 1)
+  // Limpiar posibles markdown fences
+  const limpio = texto.replace(/```json|```/g, '').trim()
 
   try {
     const parsed = JSON.parse(limpio)
@@ -166,5 +161,6 @@ function generarReglasPartido(diaPartido) {
 • Viernes → partido (sin HIIT)
 • Sábado → recuperación activa`,
   }
+  if (diaPartido === 'ninguno') return 'No hay partido esta semana. Seguir rutina normal de entrenamiento.'
   return reglas[diaPartido] || `Día de partido: ${diaPartido}. Priorizar nutrición e hidratación ese día.`
 }

@@ -140,15 +140,15 @@ export default function Perfil({ session }) {
         <div style={{ marginTop: '14px' }}>
           <label style={labelStyle}>Día habitual de partido (futsal)</label>
           <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
-            {DIAS_SEMANA.map(dia => (
+            {[...DIAS_SEMANA, 'ninguno'].map(dia => (
               <button key={dia} onClick={() => setForm({ ...form, dia_partido: dia })} style={{
                 flex: 1, padding: '8px 4px', borderRadius: '8px',
-                border: `1px solid ${form.dia_partido === dia ? C.yellow : C.border}`,
-                background: form.dia_partido === dia ? C.yellow + '18' : 'transparent',
-                color: form.dia_partido === dia ? C.yellow : C.textMuted,
-                cursor: 'pointer', fontSize: '12px', fontWeight: form.dia_partido === dia ? 700 : 400,
+                border: `1px solid ${form.dia_partido === dia ? (dia === 'ninguno' ? C.border : C.yellow) : C.border}`,
+                background: form.dia_partido === dia ? (dia === 'ninguno' ? C.surfaceHigh : C.yellow + '18') : 'transparent',
+                color: form.dia_partido === dia ? (dia === 'ninguno' ? C.textSecondary : C.yellow) : C.textMuted,
+                cursor: 'pointer', fontSize: '11px', fontWeight: form.dia_partido === dia ? 700 : 400,
                 transition: 'all 0.15s',
-              }}>{DIAS_LABELS[dia]}</button>
+              }}>{dia === 'ninguno' ? 'Ninguno' : DIAS_LABELS[dia]}</button>
             ))}
           </div>
         </div>
