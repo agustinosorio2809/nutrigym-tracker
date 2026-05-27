@@ -34,7 +34,7 @@ export default function Gimnasio({ session }) {
   const [cargandoPlantilla, setCargandoPlantilla] = useState(false)
   const isMobile = useIsMobile()
 
-  const hoy = new Date().toISOString().split('T')[0]
+  const hoy = new Date().toLocaleDateString('sv-SE')
 
   useEffect(() => { cargarHoy(); cargarHistorial() }, [])
 

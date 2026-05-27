@@ -77,6 +77,25 @@ REGLAS PARA PLANIFICAR
 • Las porciones deben ser realistas para recomposición corporal
 • El día de partido (${diaPartido}) priorizar nutrición e hidratación
 
+RUTINA DE ENTRENAMIENTO
+Frecuencia: Lunes, Miércoles y Viernes. Duración máxima 70 minutos. Core siempre al inicio.
+
+LUNES — Pecho + Tríceps + Core
+Core: Plancha frontal 3x30-45s · Elevación de piernas en banco 3x12-15 · Crunch en polea alta 3x15 (10kg)
+Pecho: Press banco plano mancuernas 4x10-12 (10kg) · Apertura banco plano 3x12 (8kg) · Peck Deck 3x12-15 (20kg) · Cruces en polea 3x12 (8kg)
+Tríceps: Extensión polea con soga 4x12 (10kg) · Press francés barra EZ 3x10 (10kg) · Fondos en banco 3x10-12
+
+MIÉRCOLES — Espalda + Bíceps + Core
+Core: Plancha lateral alternada 3x25-30s · Crunch bicicleta 3x20 · Extensión lumbar banco 45° 3x12
+Espalda: Vertical Trac jalón al frente 4x10-12 (25kg) · Remo con barra bent over 4x10 (20kg) · Remo un brazo mancuerna 3x12 (12kg) · Pull over mancuerna 3x12 (12kg)
+Bíceps: Curl con barra de pie 4x10 (15kg) · Curl alternado mancuerna 3x10 (8kg) · Curl concentrado mancuerna 3x12 (8kg)
+
+VIERNES — Hombros + Espalda + Core + Piernas
+Core: Plancha con toque de hombros 3x10 · Dragon flag asistido 3x8-10
+Hombros: Press militar barra 4x10 (20kg) · Vuelo lateral 4x12-15 (6kg) · Vuelos posteriores 3x12-15 (10kg) · Vuelos frontales polea 3x12 (6kg)
+Espalda: Low Row 4x12 (25kg) · Lat con triángulo 3x12 (20kg)
+Piernas: Prensa 45° 3x12 (50kg) · Leg Curl 3x12 (25kg)
+
 REGLAS SEGÚN DÍA DE PARTIDO
 ${generarReglasPartido(diaPartido)}
 
