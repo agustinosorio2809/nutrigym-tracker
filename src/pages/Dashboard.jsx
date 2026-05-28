@@ -63,9 +63,11 @@ export default function Dashboard({ session }) {
   const [evolucionCargas, setEvolucionCargas] = useState([])
   const [sesionGymHoy, setSesionGymHoy] = useState(null)
 
-  const hoy = new Date()
-  const diaSemana = hoy.getDay() === 0 ? 6 : hoy.getDay() - 1
-  const lunes = getLunes(hoy)
+ const hoyDate = new Date()
+const hoy = hoyDate.toLocaleDateString('sv-SE')
+const diaSemana = hoyDate.getDay() === 0 ? 6 : hoyDate.getDay() - 1
+const lunes = getLunes(hoyDate)
+
 
   useEffect(() => { cargarHoy() }, [])
   useEffect(() => { if (vista === 'reportes') cargarReportes() }, [vista, semanaReporte, reporteVista])

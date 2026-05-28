@@ -1,7 +1,7 @@
 // src/services/geminiPlan.js
 // Servicio para generar el plan semanal con Gemini
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
 
 export async function generarPlanSemanal({ perfil, viandas, diaPartido, fechaSemana }) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY
