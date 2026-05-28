@@ -409,14 +409,14 @@ export default function PlanSemanal({ session }) {
                 ⚽ ¿Qué día jugás el partido esta semana?
               </label>
               <div style={{ display: 'flex', gap: '8px' }}>
-                {['lunes', 'martes', 'miercoles', 'jueves', 'viernes'].map(dia => (
+                {['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'ninguno'].map(dia => (
                   <button key={dia} onClick={() => setDiaPartidoIA(dia)} style={{
                     flex: 1, padding: '8px 4px', borderRadius: '8px', border: `1px solid ${diaPartidoIA === dia ? '#F59E0B' : C.border}`,
                     background: diaPartidoIA === dia ? '#F59E0B18' : 'transparent',
                     color: diaPartidoIA === dia ? '#F59E0B' : C.textMuted,
                     cursor: 'pointer', fontSize: '11px', fontWeight: diaPartidoIA === dia ? 700 : 400,
                   }}>
-                    {dia.slice(0, 3).charAt(0).toUpperCase() + dia.slice(1, 3)}
+                    {dia === 'ninguno' ? 'Ninguno' : dia.slice(0, 3).charAt(0).toUpperCase() + dia.slice(1, 3)}
                   </button>
                 ))}
               </div>
