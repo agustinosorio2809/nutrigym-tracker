@@ -75,7 +75,7 @@ const lunes = getLunes(hoyDate)
 
   async function cargarHoy() {
     setLoading(true)
-    const fechaHoy = formatFecha(hoy)
+    const fechaHoy = hoy
     const fechaLunes = formatFecha(lunes)
     const { data: gymHoy } = await supabase.from('gym_logs').select('*').eq('user_id', session.user.id).eq('date', fechaHoy)
     setSesionGymHoy(gymHoy?.[0] || null)
@@ -258,10 +258,10 @@ const lunes = getLunes(hoyDate)
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div>
               <div style={{ fontSize: '13px', color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2px' }}>
-                {hoy.toLocaleDateString('es-AR', { weekday: 'long' })}
+                {hoyDate.toLocaleDateString('es-AR', { weekday: 'long' })}
               </div>
               <div style={{ fontSize: '18px', fontWeight: 700, color: C.textPrimary }}>
-                {hoy.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}
+                {hoyDate.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}
               </div>
             </div>
             {total > 0 && (
