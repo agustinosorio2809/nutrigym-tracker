@@ -1,16 +1,111 @@
-# React + Vite
+# NutriGym Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A full-stack progressive web app for tracking nutrition and gym routines, with Android APK support.
 
-Currently, two official plugins are available:
+🌐 **Live app:** [nutrigym-tracker.vercel.app](https://nutrigym-tracker.vercel.app)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Nutrition tracking** — log daily meals and monitor caloric/macro intake
+- **Gym routines** — structured workout plans organized by muscle group
+  - Chest + Triceps + Core
+  - Back + Biceps + Core
+  - Shoulders + Back + Core + Legs
+- **Body recomposition focus** — dual-protocol cardio system alongside strength training
+- **Dark mode UI** — clean interface with bottom navigation
+- **Android APK** — installable as a native app on Android devices
+- **PWA support** — installable from the browser on any device
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React + Vite |
+| Backend / DB | Supabase (PostgreSQL) |
+| Hosting | Vercel |
+| Mobile | Capacitor (Android APK) |
+| CI/CD | GitHub Actions |
+
+---
+
+## Architecture
+
+```
+nutrigym-tracker/
+├── src/
+│   ├── components/       # UI components (bottom nav, cards, forms)
+│   ├── pages/            # Main views (nutrition, routines, progress)
+│   └── lib/              # Supabase client and helpers
+├── android/              # Capacitor Android project
+├── .github/workflows/    # GitHub Actions (APK build + deploy)
+└── vite.config.js
+```
+
+---
+
+## CI/CD Pipeline
+
+On every push to `main`:
+
+1. Vercel automatically deploys the web app
+2. GitHub Actions builds the Android APK via Capacitor
+3. APK is published as a release artifact
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- A Supabase project
+
+### Setup
+
+```bash
+git clone https://github.com/agustinosorio2809/nutrigym-tracker
+cd nutrigym-tracker
+npm install
+```
+
+Create a `.env` file:
+
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_anon_key
+```
+
+```bash
+npm run dev
+```
+
+### Android APK
+
+```bash
+npm run build
+npx cap sync android
+npx cap open android
+```
+
+Or download the latest APK from [Releases](https://github.com/agustinosorio2809/nutrigym-tracker/releases).
+
+---
+
+## Database
+
+Hosted on Supabase. Main tables:
+
+- `profiles` — user data
+- `meals` — nutrition log entries
+- `routines` — workout templates
+- `exercises` — exercise catalog per routine
+
+---
+
+## License
+
+MIT
