@@ -115,7 +115,7 @@ export default function PlanSemanal({ session }) {
   async function cargarSemana() {
     setLoading(true)
     const fecha = formatFecha(weekStart)
-    let { data: planes } = await supabase.from('meal_plans').select('*').eq('week_start', fecha)
+    let { data: planes } = await supabase.from('meal_plans').select('*').eq('user_id', session.user.id).eq('week_start', fecha)
     let plan = planes?.[0]
     if (!plan) {
       const { data: nuevo } = await supabase.from('meal_plans').insert({ user_id: session.user.id, week_start: fecha }).select()
@@ -191,7 +191,7 @@ export default function PlanSemanal({ session }) {
   async function duplicarSemanaAnterior() {
     if (!confirm('¿Duplicar todas las comidas de la semana anterior?')) return
     const fechaAnterior = formatFecha(new Date(weekStart.getTime() - 7 * 86400000))
-    let { data: planesAnt } = await supabase.from('meal_plans').select('*').eq('week_start', fechaAnterior)
+    let { data: planesAnt } = await supabase.from('meal_plans').select('*').eq('user_id', session.user.id).eq('week_start', fechaAnterior)
     const planAnterior = planesAnt?.[0]
     if (!planAnterior) { alert('No hay plan en la semana anterior.'); return }
     const { data: comidasAnt } = await supabase.from('planned_meals').select('*').eq('plan_id', planAnterior.id)

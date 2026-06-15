@@ -1,11 +1,7 @@
 // src/services/geminiPlan.js
 // Servicio para generar el plan semanal con Gemini
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
-
 export async function generarPlanSemanal({ perfil, viandas, diaPartido, fechaSemana }) {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-  if (!apiKey) throw new Error('Falta la API Key de Gemini en el archivo .env')
 
   const stockViandas = viandas.length > 0
     ? viandas.map(v => `• ${v.name}${v.protein_source ? ` (${v.protein_source})` : ''}${v.category ? ` [${v.category}]` : ''} — ${v.portions} porción${v.portions !== 1 ? 'es' : ''}`).join('\n')
@@ -122,7 +118,7 @@ Donde "dia" es el índice del día de la semana: 0=Lunes, 1=Martes, 2=Miércoles
 El array debe tener exactamente 5 elementos (lunes a viernes).
 No incluyas ningún texto fuera del JSON.`
 
-  const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+  const response = await fetch('/api/gemini', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -79,7 +79,7 @@ const lunes = getLunes(hoyDate)
     const fechaLunes = formatFecha(lunes)
     const { data: gymHoy } = await supabase.from('gym_logs').select('*').eq('user_id', session.user.id).eq('date', fechaHoy)
     setSesionGymHoy(gymHoy?.[0] || null)
-    let { data: planes } = await supabase.from('meal_plans').select('*').eq('week_start', fechaLunes)
+    let { data: planes } = await supabase.from('meal_plans').select('*').eq('user_id', session.user.id).eq('week_start', fechaLunes)
     const plan = planes?.[0]
     if (!plan) { setLoading(false); return }
     const { data: meals } = await supabase.from('planned_meals').select('*').eq('plan_id', plan.id).eq('day_of_week', diaSemana).order('slot')
@@ -106,7 +106,7 @@ const lunes = getLunes(hoyDate)
 
   async function cargarAdherencia() {
     const fecha = formatFecha(semanaReporte)
-    const { data: planes } = await supabase.from('meal_plans').select('*').eq('week_start', fecha)
+    const { data: planes } = await supabase.from('meal_plans').select('*').eq('user_id', session.user.id).eq('week_start', fecha)
     const plan = planes?.[0]
     if (!plan) { setAdherenciaSemanal(null); return }
     const { data: meals } = await supabase.from('planned_meals').select('*').eq('plan_id', plan.id)
@@ -127,7 +127,7 @@ const lunes = getLunes(hoyDate)
 
   async function cargarExcepciones() {
     const desde = new Date(semanaReporte); desde.setDate(desde.getDate() - 21)
-    const { data: planes } = await supabase.from('meal_plans').select('*').gte('week_start', formatFecha(desde)).lte('week_start', formatFecha(semanaReporte))
+    const { data: planes } = await supabase.from('meal_plans').select('*').eq('user_id', session.user.id).gte('week_start', formatFecha(desde)).lte('week_start', formatFecha(semanaReporte))
     if (!planes?.length) { setExcepcionesFrecuentes([]); return }
     const ids = planes.map(p => p.id)
     const { data: meals } = await supabase.from('planned_meals').select('*').in('plan_id', ids)
@@ -141,7 +141,7 @@ const lunes = getLunes(hoyDate)
 
   async function cargarViandas() {
     const fecha = formatFecha(semanaReporte)
-    const { data: planes } = await supabase.from('meal_plans').select('*').eq('week_start', fecha)
+    const { data: planes } = await supabase.from('meal_plans').select('*').eq('user_id', session.user.id).eq('week_start', fecha)
     const plan = planes?.[0]
     if (!plan) { setViandasResumen([]); return }
     const { data: meals } = await supabase.from('planned_meals').select('*').eq('plan_id', plan.id).eq('is_vianda', true)
