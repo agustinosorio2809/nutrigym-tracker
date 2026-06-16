@@ -8,12 +8,12 @@ A full-stack progressive web app for tracking nutrition and gym routines, with A
 
 ## Features
 
-- **Nutrition tracking** — log daily meals and monitor caloric/macro intake
-- **Gym routines** — structured workout plans organized by muscle group
-  - Chest + Triceps + Core
-  - Back + Biceps + Core
-  - Shoulders + Back + Core + Legs
-- **Body recomposition focus** — dual-protocol cardio system alongside strength training
+- **Nutrition tracking** — log daily meals against a structured weekly plan
+- **AI meal planning** — generate a personalized weekly meal plan with Gemini 2.5 Flash Lite
+- **Viandas inventory** — track your prepared meal containers (viandas) and portion counts
+- **Gym routines** — structured workout sessions organized by muscle group with weight/reps history
+- **Local notifications** — configurable meal-time reminders (Android)
+- **Body recomposition focus** — nutrition and training designed around fat loss + muscle maintenance
 - **Dark mode UI** — clean interface with bottom navigation
 - **Android APK** — installable as a native app on Android devices
 - **PWA support** — installable from the browser on any device
@@ -24,10 +24,13 @@ A full-stack progressive web app for tracking nutrition and gym routines, with A
 
 | Layer | Technology |
 |---|---|
-| Frontend | React + Vite |
-| Backend / DB | Supabase (PostgreSQL) |
+| Frontend | React 19 + Vite 8 |
+| Backend / DB | Supabase (PostgreSQL + RLS + Auth) |
 | Hosting | Vercel |
 | Mobile | Capacitor (Android APK) |
+| AI | Google Gemini 2.5 Flash Lite |
+| Charts | Recharts |
+| Excel import | SheetJS (xlsx) |
 | CI/CD | GitHub Actions |
 
 ---
@@ -36,13 +39,16 @@ A full-stack progressive web app for tracking nutrition and gym routines, with A
 
 ```
 nutrigym-tracker/
+├── api/
+│   └── gemini.js         # Vercel serverless proxy — keeps Gemini API key server-side
 ├── src/
-│   ├── components/       # UI components (bottom nav, cards, forms)
-│   ├── pages/            # Main views (nutrition, routines, progress)
-│   └── lib/              # Supabase client and helpers
+│   ├── pages/            # Dashboard, PlanSemanal, Viandas, Gimnasio, Perfil
+│   ├── services/         # geminiPlan.js, notifications.js
+│   ├── App.jsx           # Auth, routing, nav
+│   └── supabase.js       # Supabase client (singleton)
+├── supabase/migrations/  # SQL schema + RLS policies
 ├── android/              # Capacitor Android project
-├── .github/workflows/    # GitHub Actions (APK build + deploy)
-└── vite.config.js
+└── .github/workflows/    # GitHub Actions (APK build)
 ```
 
 ---
@@ -61,7 +67,7 @@ On every push to `main`:
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - A Supabase project
 
 ### Setup
@@ -76,8 +82,10 @@ Create a `.env` file:
 
 ```env
 VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_SUPABASE_KEY=your_supabase_anon_key
 ```
+
+> **Gemini API key:** `GEMINI_API_KEY` is server-side only — add it to Vercel Environment Variables (no `VITE_` prefix). Never put it in `.env`; the app routes all Gemini calls through `api/gemini.js`.
 
 ```bash
 npm run dev
@@ -97,12 +105,18 @@ Or download the latest APK from [Releases](https://github.com/agustinosorio2809/
 
 ## Database
 
-Hosted on Supabase. Main tables:
+Hosted on Supabase with Row Level Security enabled on all tables (each user sees only their own data).
 
-- `profiles` — user data
-- `meals` — nutrition log entries
-- `routines` — workout templates
-- `exercises` — exercise catalog per routine
+| Table | Description |
+|---|---|
+| `meal_plans` | Weekly plan header (one per week per user) |
+| `planned_meals` | Individual meals per day/slot within a plan |
+| `meal_logs` | Daily log entries tracking actual vs planned |
+| `viandas` | Prepared meal container inventory with portion counts |
+| `gym_logs` | Gym session records |
+| `gym_exercises` | Exercises within a session |
+| `routine_templates` | Saved exercise templates per routine type |
+| `user_profile` | Physical stats, training days, notification prefs |
 
 ---
 
