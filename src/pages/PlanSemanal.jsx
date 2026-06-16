@@ -145,6 +145,7 @@ export default function PlanSemanal({ session }) {
         viandas: viandasData || [],
         diaPartido: diaPartidoIA,
         fechaSemana: formatFecha(weekStart),
+        accessToken: session.access_token,
       })
 
       // Borrar comidas existentes de la semana
