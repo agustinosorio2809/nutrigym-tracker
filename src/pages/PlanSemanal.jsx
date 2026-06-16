@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { generarPlanSemanal } from '../services/geminiPlan'
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -31,9 +31,32 @@ function useIsMobile() {
   return isMobile
 }
 
+function celdaATexto(value) {
+  if (value == null) return ''
+  if (typeof value === 'object') {
+    if (Array.isArray(value.richText)) return value.richText.map(t => t.text).join('')
+    if (value.text != null) return String(value.text)
+    if (value.result != null) return String(value.result)
+    if (value instanceof Date) return value.toISOString()
+  }
+  return String(value)
+}
+
+function hojaAFilas(worksheet) {
+  let maxCol = 0
+  worksheet.eachRow({ includeEmpty: true }, (row) => { if (row.cellCount > maxCol) maxCol = row.cellCount })
+  const rows = []
+  worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    const valores = []
+    for (let c = 1; c <= maxCol; c++) valores.push(celdaATexto(row.getCell(c).value))
+    rows[rowNumber - 1] = valores
+  })
+  return rows
+}
+
 function parsearExcel(workbook) {
-  const sheet = workbook.Sheets[workbook.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+  const worksheet = workbook.worksheets[0]
+  const rows = hojaAFilas(worksheet)
   const semanas = []; let i = 0
   while (i < rows.length) {
     const celda = String(rows[i][0] || '').trim()
@@ -68,8 +91,10 @@ function parsearExcel(workbook) {
   return semanas
 }
 
-function descargarTemplate() {
-  const wb = XLSX.utils.book_new()
+async function descargarTemplate() {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('Planes Semanales')
+  ws.columns = [{ width: 14 }, { width: 18 }, { width: 28 }, { width: 28 }, { width: 24 }, { width: 28 }]
   const datos = [
     ['SEMANA 01/01', '', '', '', '', ''],
     ['Día', 'Entreno', 'Desayuno', 'Almuerzo', 'Merienda', 'Cena'],
@@ -84,10 +109,14 @@ function descargarTemplate() {
     ['Lunes', '', '', '', '', ''], ['Martes', '', '', '', '', ''],
     ['Miércoles', '', '', '', '', ''], ['Jueves', '', '', '', '', ''], ['Viernes', '', '', '', '', ''],
   ]
-  const ws = XLSX.utils.aoa_to_sheet(datos)
-  ws['!cols'] = [{ wch: 14 }, { wch: 18 }, { wch: 28 }, { wch: 28 }, { wch: 24 }, { wch: 28 }]
-  XLSX.utils.book_append_sheet(wb, ws, 'Planes Semanales')
-  XLSX.writeFile(wb, 'NutriGym_Template.xlsx')
+  datos.forEach(fila => ws.addRow(fila))
+  const buffer = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'NutriGym_Template.xlsx'
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 export default function PlanSemanal({ session }) {
@@ -204,11 +233,16 @@ export default function PlanSemanal({ session }) {
   function onFileChange(e) {
     const file = e.target.files[0]; if (!file) return
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      const wb = XLSX.read(ev.target.result, { type: 'array', codepage: 65001 })
-      const semanas = parsearExcel(wb)
-      if (!semanas.length) { alert('No se encontraron semanas en el archivo.'); return }
-      setSemanasExcel(semanas); setSemanaElegida(semanas[semanas.length - 1]); setModalImport(true)
+    reader.onload = async (ev) => {
+      try {
+        const wb = new ExcelJS.Workbook()
+        await wb.xlsx.load(ev.target.result)
+        const semanas = parsearExcel(wb)
+        if (!semanas.length) { alert('No se encontraron semanas en el archivo.'); return }
+        setSemanasExcel(semanas); setSemanaElegida(semanas[semanas.length - 1]); setModalImport(true)
+      } catch {
+        alert('No se pudo leer el archivo Excel. Verificá que sea un .xlsx válido.')
+      }
     }
     reader.readAsArrayBuffer(file); e.target.value = ''
   }
@@ -282,7 +316,7 @@ export default function PlanSemanal({ session }) {
           <button onClick={limpiarSemana} style={{ background: '#EF444415', color: C.red, border: `1px solid ${C.red}40`, padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
             🗑 Limpiar semana
           </button>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={onFileChange} />
+          <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={onFileChange} />
         </div>
       </div>
 

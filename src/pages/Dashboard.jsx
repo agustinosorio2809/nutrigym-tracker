@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { Link } from 'react-router-dom'
 
 const SLOTS = ['desayuno', 'almuerzo', 'merienda', 'cena']
@@ -189,27 +189,35 @@ const lunes = getLunes(hoyDate)
     await cargarHoy(); setSaving(false); setModal(null)
   }
 
-  function exportarExcel() {
-    const wb = XLSX.utils.book_new()
+  function agregarHoja(wb, nombre, filas, anchos) {
+    if (!filas.length) return
+    const ws = wb.addWorksheet(nombre)
+    const headers = Object.keys(filas[0])
+    ws.columns = headers.map((h, i) => ({ header: h, key: h, width: anchos?.[i] }))
+    filas.forEach(fila => ws.addRow(fila))
+  }
+
+  async function exportarExcel() {
+    const wb = new ExcelJS.Workbook()
     if (adherenciaSemanal) {
       const DIAS_FULL = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
       const filas = adherenciaSemanal.porDia.map((d, i) => ({ Día: DIAS_FULL[i], 'Comidas planificadas': d.total, 'Comidas cumplidas': d.cumplidas, 'Adherencia (%)': d.total > 0 ? d.pct : '—' }))
       filas.push({ Día: 'TOTAL', 'Comidas planificadas': adherenciaSemanal.totalComidas, 'Comidas cumplidas': adherenciaSemanal.totalCumplidas, 'Adherencia (%)': adherenciaSemanal.pct })
-      const ws1 = XLSX.utils.json_to_sheet(filas)
-      ws1['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 20 }, { wch: 16 }]
-      XLSX.utils.book_append_sheet(wb, ws1, 'Adherencia')
+      agregarHoja(wb, 'Adherencia', filas, [12, 22, 20, 16])
     }
     if (viandasResumen.length > 0) {
-      const ws2 = XLSX.utils.json_to_sheet(viandasResumen.map(v => ({ Día: v.dia, Slot: v.slot, Descripción: v.descripcion })))
-      ws2['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 40 }]
-      XLSX.utils.book_append_sheet(wb, ws2, 'Viandas')
+      agregarHoja(wb, 'Viandas', viandasResumen.map(v => ({ Día: v.dia, Slot: v.slot, Descripción: v.descripcion })), [12, 12, 40])
     }
     if (evolucionCargas.length > 0) {
-      const ws3 = XLSX.utils.json_to_sheet(evolucionCargas.map(e => ({ Fecha: e.fecha, Ejercicio: ejercicioSeleccionado, Series: e.series || '—', Reps: e.reps || '—', 'Peso (kg)': e.kg })))
-      ws3['!cols'] = [{ wch: 12 }, { wch: 24 }, { wch: 8 }, { wch: 8 }, { wch: 10 }]
-      XLSX.utils.book_append_sheet(wb, ws3, 'Cargas')
+      agregarHoja(wb, 'Cargas', evolucionCargas.map(e => ({ Fecha: e.fecha, Ejercicio: ejercicioSeleccionado, Series: e.series || '—', Reps: e.reps || '—', 'Peso (kg)': e.kg })), [12, 24, 8, 8, 10])
     }
-    XLSX.writeFile(wb, `NutriGym_${formatSemana(semanaReporte).replace(' — ', '_')}.xlsx`)
+    const buffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `NutriGym_${formatSemana(semanaReporte).replace(' — ', '_')}.xlsx`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const cumplidas = Object.values(logs).filter(l => l.status === 'cumplida' || l.status === 'con_cambios').length
