@@ -224,6 +224,20 @@ usando `default_sets` como cantidad de series.
 Marca visual sobre el ejercicio cuando la mejor serie de hoy supera el mejor 1RM
 histórico de ese ejercicio, con la mejora expresada en kg.
 
+### Consumidores existentes que hay que adaptar
+
+Dos lugares fuera del flujo principal leen las columnas escalares y romperían con la
+migración destructiva:
+
+- **Chips del historial** en `Gimnasio.jsx`: muestran `nombre · Nkg` desde `ej.weight_kg`.
+  Pasan a usar el peso de la mejor serie.
+- **Gráfico de evolución de carga** en `Dashboard.jsx` (`cargarEvolucion`): lee
+  `weight_kg`, `sets` y `reps` para trazar la progresión por ejercicio. Pasa a leer la
+  mejor serie de cada sesión, que es además la lectura correcta para progresión de carga.
+
+Agregar una línea de 1RM estimado al gráfico del Dashboard queda **fuera de alcance**: el
+cambio solo mantiene el comportamiento actual funcionando sobre el esquema nuevo.
+
 ---
 
 ## Testing
