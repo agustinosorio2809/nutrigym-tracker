@@ -2,17 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabase'
 import ExcelJS from 'exceljs'
 import { generarPlanSemanal } from '../services/geminiPlan'
+import { C } from '../theme'
+import { IconSunrise, IconSun, IconApple, IconMoon, IconSparkle, IconUpload, IconDownload, IconTrash, IconBall, IconRobot, IconMeal, IconWarning } from '../components/icons'
+import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 const SLOTS = ['desayuno', 'almuerzo', 'merienda', 'cena']
-const SLOT_ICONS = { desayuno: '🌅', almuerzo: '☀️', merienda: '🍎', cena: '🌙' }
-
-const C = {
-  bg: '#0F1117', surface: '#1A1D27', surfaceHigh: '#22263A',
-  border: '#2A2D3E', accent: '#10B981', accentDim: '#10B98118',
-  accentText: '#34D399', blue: '#3B82F6', blueDim: '#3B82F618',
-  red: '#EF4444', textPrimary: '#F1F5F9', textSecondary: '#94A3B8', textMuted: '#4B5563',
-}
+const SLOT_ICON_CMP = { desayuno: IconSunrise, almuerzo: IconSun, merienda: IconApple, cena: IconMoon }
 
 function getLunes(date) {
   const d = new Date(date); const day = d.getDay()
@@ -119,6 +115,69 @@ async function descargarTemplate() {
   URL.revokeObjectURL(url)
 }
 
+function ActionButton({ onClick, tone = 'default', children }) {
+  const tones = {
+    default: { base: { background: 'transparent', color: C.textSecondary, border: `1px solid ${C.border}` }, hover: { borderColor: C.textMuted, color: C.textPrimary } },
+    accent: { base: { background: C.accentDim, color: C.accentText, border: `1px solid ${C.accent}40` }, hover: { background: C.accent, color: '#fff' } },
+    blue: { base: { background: C.blueDim, color: C.blue, border: `1px solid ${C.blue}40` }, hover: { background: C.blue, color: '#fff' } },
+    red: { base: { background: '#EF444415', color: C.red, border: `1px solid ${C.red}40` }, hover: { background: C.red, color: '#fff' } },
+  }
+  const t = tones[tone]
+  const { style, handlers } = useInteractiveStyle(
+    { ...t.base, display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 },
+    { hover: t.hover, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function DayChip({ active, hasData, onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      flexShrink: 0, padding: '6px 14px', borderRadius: '20px', border: 'none',
+      cursor: 'pointer', fontSize: '13px', fontWeight: active ? 700 : 400,
+      background: active ? C.accent : C.surface,
+      color: active ? 'white' : hasData ? C.textSecondary : C.textMuted,
+      position: 'relative',
+    },
+    { hover: active ? null : { background: C.surfaceHigh }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function MealRow({ slot, comida, onClick }) {
+  const Icon = SLOT_ICON_CMP[slot] || IconMeal
+  const { style, handlers } = useInteractiveStyle(
+    { display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 4px', borderBottom: `1px solid ${C.border}`, cursor: 'pointer' },
+    { hover: { background: C.surfaceHigh }, focus: focusRing }
+  )
+  return (
+    <div onClick={onClick} style={style} tabIndex={0} role="button" {...handlers}>
+      <div style={{
+        width: '34px', height: '34px', borderRadius: '9px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: comida ? C.accentDim : C.surfaceHigh,
+        border: `1px solid ${comida ? C.accent + '40' : C.border}`,
+      }}>
+        <Icon size={16} color={comida ? C.accentText : C.textMuted} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+          <span style={{ fontSize: '11px', color: C.textMuted, textTransform: 'capitalize', letterSpacing: '0.05em' }}>{slot}</span>
+          {comida?.is_vianda && <span style={{ fontSize: '10px', background: C.accentDim, color: C.accentText, padding: '1px 6px', borderRadius: '10px' }}>vianda</span>}
+        </div>
+        {comida ? (
+          <>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: C.textPrimary }}>{comida.description}</div>
+            {comida.meal_goal && <div style={{ fontSize: '11px', color: C.textSecondary, marginTop: '2px' }}>{comida.meal_goal}</div>}
+          </>
+        ) : (
+          <div style={{ fontSize: '13px', color: C.textMuted }}>+ agregar</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function PlanSemanal({ session }) {
   const [weekStart, setWeekStart] = useState(getLunes(new Date()))
   const [planId, setPlanId] = useState(null)
@@ -163,7 +222,6 @@ export default function PlanSemanal({ session }) {
     setGenerando(true)
     setErrorIA('')
     try {
-      // Cargar perfil y viandas
       const [{ data: perfilData }, { data: viandasData }] = await Promise.all([
         supabase.from('user_profile').select('*').eq('user_id', session.user.id).single(),
         supabase.from('viandas').select('*').eq('user_id', session.user.id).gt('portions', 0).order('name'),
@@ -177,13 +235,11 @@ export default function PlanSemanal({ session }) {
         accessToken: session.access_token,
       })
 
-      // Borrar comidas existentes de la semana
       const existentes = Object.values(comidas)
       if (existentes.length > 0) {
         await supabase.from('planned_meals').delete().in('id', existentes.map(c => c.id))
       }
 
-      // Insertar el plan generado
       const SLOT_MAP = { desayuno: 'desayuno', almuerzo: 'almuerzo', merienda: 'merienda', cena: 'cena' }
       const nuevas = []
       plan.forEach(diaObj => {
@@ -293,92 +349,46 @@ export default function PlanSemanal({ session }) {
 
   return (
     <div style={{ color: C.textPrimary }}>
-      {/* Header navegación semana */}
       <div style={{ marginBottom: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
-          <button onClick={semanaAnterior} style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', cursor: 'pointer', background: C.surface, color: C.textSecondary }}>←</button>
+          <WeekArrow onClick={semanaAnterior}>←</WeekArrow>
           <span style={{ fontWeight: 700, fontSize: '15px', color: C.textPrimary }}>{fechaLunes} — {fechaDomingo}</span>
-          <button onClick={semanaSiguiente} style={{ padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', cursor: 'pointer', background: C.surface, color: C.textSecondary }}>→</button>
+          <WeekArrow onClick={semanaSiguiente}>→</WeekArrow>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={duplicarSemanaAnterior} style={{ background: C.accentDim, color: C.accentText, border: `1px solid ${C.accent}40`, padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
-            Duplicar semana anterior
-          </button>
-          <button onClick={() => { setModalIA(true); setErrorIA('') }} style={{ background: '#7C3AED18', color: '#A78BFA', border: '1px solid #7C3AED40', padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>
-            ✨ Generar con IA
-          </button>
-          <button onClick={() => fileRef.current.click()} style={{ background: C.blueDim, color: C.blue, border: `1px solid ${C.blue}40`, padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
-            ⬆ Importar Excel
-          </button>
-          <button onClick={descargarTemplate} style={{ background: 'transparent', color: C.textSecondary, border: `1px solid ${C.border}`, padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px' }}>
-            ⬇ Template
-          </button>
-          <button onClick={limpiarSemana} style={{ background: '#EF444415', color: C.red, border: `1px solid ${C.red}40`, padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
-            🗑 Limpiar semana
-          </button>
+          <ActionButton onClick={duplicarSemanaAnterior} tone="accent">Duplicar semana anterior</ActionButton>
+          <ActionButton onClick={() => { setModalIA(true); setErrorIA('') }} tone="accent"><IconSparkle size={13} />Generar con IA</ActionButton>
+          <ActionButton onClick={() => fileRef.current.click()} tone="blue"><IconUpload size={13} />Importar Excel</ActionButton>
+          <ActionButton onClick={descargarTemplate} tone="default"><IconDownload size={13} />Template</ActionButton>
+          <ActionButton onClick={limpiarSemana} tone="red"><IconTrash size={13} />Limpiar semana</ActionButton>
           <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={onFileChange} />
         </div>
       </div>
 
       {loading ? (
-        <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>Cargando...</div>
+        <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>Cargando…</div>
       ) : isMobile ? (
-        // ── Vista Mobile ──
         <div>
           <div style={{ display: 'flex', overflowX: 'auto', gap: '6px', marginBottom: '1rem', paddingBottom: '4px' }}>
             {DIAS.map((dia, i) => {
               const tieneDatos = SLOTS.some(s => comidas[`${i}-${s}`])
               return (
-                <button key={i} onClick={() => setDiaSeleccionado(i)} style={{
-                  flexShrink: 0, padding: '6px 14px', borderRadius: '20px', border: 'none',
-                  cursor: 'pointer', fontSize: '13px', fontWeight: diaSeleccionado === i ? 700 : 400,
-                  background: diaSeleccionado === i ? C.accent : C.surface,
-                  color: diaSeleccionado === i ? 'white' : tieneDatos ? C.textSecondary : C.textMuted,
-                  position: 'relative', transition: 'all 0.15s',
-                }}>
+                <DayChip key={i} active={diaSeleccionado === i} hasData={tieneDatos} onClick={() => setDiaSeleccionado(i)}>
                   {dia.slice(0, 3)}
                   {tieneDatos && diaSeleccionado !== i && (
                     <span style={{ position: 'absolute', top: '4px', right: '4px', width: '5px', height: '5px', borderRadius: '50%', background: C.accent }} />
                   )}
-                </button>
+                </DayChip>
               )
             })}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {SLOTS.map(slot => {
-              const comida = comidas[`${diaSeleccionado}-${slot}`]
-              return (
-                <div key={slot} onClick={() => abrirModal(diaSeleccionado, slot)} style={{
-                  border: `1px solid ${comida ? C.accent + '30' : C.border}`,
-                  borderLeft: `3px solid ${comida ? C.accent : C.border}`,
-                  borderRadius: '12px', padding: '14px 16px', cursor: 'pointer',
-                  background: comida ? C.accentDim : C.surface, transition: 'background 0.15s',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                        <span>{SLOT_ICONS[slot]}</span>
-                        <span style={{ fontSize: '11px', color: C.textMuted, textTransform: 'capitalize', letterSpacing: '0.05em' }}>{slot}</span>
-                        {comida?.is_vianda && <span style={{ fontSize: '10px', background: C.accentDim, color: C.accentText, padding: '1px 6px', borderRadius: '10px', border: `1px solid ${C.accent}30` }}>vianda</span>}
-                      </div>
-                      {comida ? (
-                        <>
-                          <div style={{ fontSize: '14px', fontWeight: 600, color: C.textPrimary }}>{comida.description}</div>
-                          {comida.meal_goal && <div style={{ fontSize: '11px', color: C.textSecondary, marginTop: '2px' }}>{comida.meal_goal}</div>}
-                        </>
-                      ) : (
-                        <div style={{ fontSize: '13px', color: C.textMuted }}>+ agregar</div>
-                      )}
-                    </div>
-                    <span style={{ color: C.textMuted, fontSize: '16px', marginLeft: '8px' }}>›</span>
-                  </div>
-                </div>
-              )
-            })}
+          <div>
+            {SLOTS.map(slot => (
+              <MealRow key={slot} slot={slot} comida={comidas[`${diaSeleccionado}-${slot}`]} onClick={() => abrirModal(diaSeleccionado, slot)} />
+            ))}
           </div>
         </div>
       ) : (
-        // ── Vista Desktop ──
         <div style={{ overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '700px' }}>
             <thead>
@@ -393,7 +403,7 @@ export default function PlanSemanal({ session }) {
               {SLOTS.map(slot => (
                 <tr key={slot}>
                   <td style={{ padding: '10px 14px', background: C.surfaceHigh, border: `1px solid ${C.border}`, fontWeight: 600, fontSize: '12px', textTransform: 'capitalize', color: C.textSecondary }}>
-                    {SLOT_ICONS[slot]} {slot}
+                    {slot}
                   </td>
                   {DIAS.map((_, i) => {
                     const comida = comidas[`${i}-${slot}`]
@@ -402,7 +412,6 @@ export default function PlanSemanal({ session }) {
                         padding: '10px 12px', border: `1px solid ${C.border}`, cursor: 'pointer',
                         verticalAlign: 'top', minWidth: '110px',
                         background: comida ? C.accentDim : C.surface,
-                        transition: 'background 0.15s',
                       }}>
                         {comida ? (
                           <div>
@@ -428,7 +437,9 @@ export default function PlanSemanal({ session }) {
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: C.surface, borderRadius: '20px 20px 0 0', width: '100%', maxWidth: '480px', padding: '1.5rem' }}>
             <div style={{ width: '40px', height: '4px', background: C.border, borderRadius: '2px', margin: '0 auto 1.25rem' }} />
-            <div style={{ fontSize: '18px', fontWeight: 800, color: '#A78BFA', marginBottom: '4px' }}>✨ Generar plan con IA</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: 800, color: C.accentText, marginBottom: '4px' }}>
+              <IconSparkle size={18} color={C.accentText} />Generar plan con IA
+            </div>
             <div style={{ fontSize: '13px', color: C.textSecondary, marginBottom: '1.25rem' }}>
               Gemini va a generar el plan semanal completo usando tu perfil y el stock de viandas actual.
             </div>
@@ -436,23 +447,20 @@ export default function PlanSemanal({ session }) {
             <div style={{ background: C.surfaceHigh, borderRadius: '10px', padding: '12px 14px', marginBottom: '1.25rem', fontSize: '12px', color: C.textMuted }}>
               <div style={{ fontWeight: 600, color: C.textSecondary, marginBottom: '4px' }}>Semana a generar:</div>
               <div style={{ color: C.textPrimary }}>{fechaLunes} — {fechaDomingo}</div>
-              <div style={{ color: '#F59E0B', marginTop: '4px', fontSize: '11px' }}>⚠ Esto reemplazará las comidas existentes de esta semana.</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: C.yellow, marginTop: '4px', fontSize: '11px' }}>
+                <IconWarning size={11} color={C.yellow} />Esto reemplazará las comidas existentes de esta semana.
+              </div>
             </div>
 
             <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ fontSize: '12px', color: C.textSecondary, display: 'block', marginBottom: '8px', fontWeight: 600 }}>
-                ⚽ ¿Qué día jugás el partido esta semana?
-              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: C.textSecondary, marginBottom: '8px', fontWeight: 600 }}>
+                <IconBall size={13} color={C.textSecondary} />¿Qué día jugás el partido esta semana?
+              </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 {['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'ninguno'].map(dia => (
-                  <button key={dia} onClick={() => setDiaPartidoIA(dia)} style={{
-                    flex: 1, padding: '8px 4px', borderRadius: '8px', border: `1px solid ${diaPartidoIA === dia ? '#F59E0B' : C.border}`,
-                    background: diaPartidoIA === dia ? '#F59E0B18' : 'transparent',
-                    color: diaPartidoIA === dia ? '#F59E0B' : C.textMuted,
-                    cursor: 'pointer', fontSize: '11px', fontWeight: diaPartidoIA === dia ? 700 : 400,
-                  }}>
+                  <PartidoChip key={dia} active={diaPartidoIA === dia} onClick={() => setDiaPartidoIA(dia)}>
                     {dia === 'ninguno' ? 'Ninguno' : dia.slice(0, 3).charAt(0).toUpperCase() + dia.slice(1, 3)}
-                  </button>
+                  </PartidoChip>
                 ))}
               </div>
             </div>
@@ -464,24 +472,17 @@ export default function PlanSemanal({ session }) {
             )}
 
             {generando && (
-              <div style={{ background: '#7C3AED15', border: '1px solid #7C3AED40', borderRadius: '8px', padding: '12px 14px', marginBottom: '1rem', color: '#A78BFA', fontSize: '13px', textAlign: 'center' }}>
-                <div style={{ fontSize: '20px', marginBottom: '6px' }}>🤖</div>
-                Generando tu plan semanal... esto puede tardar unos segundos.
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', background: C.accentDim, border: `1px solid ${C.accent}40`, borderRadius: '8px', padding: '12px 14px', marginBottom: '1rem', color: C.accentText, fontSize: '13px', textAlign: 'center' }}>
+                <IconRobot size={22} color={C.accentText} />
+                Generando tu plan semanal… esto puede tardar unos segundos.
               </div>
             )}
 
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={generarConIA} disabled={generando} style={{
-                flex: 1, background: '#7C3AED', color: 'white', border: 'none',
-                padding: '13px', borderRadius: '10px', cursor: generando ? 'wait' : 'pointer',
-                fontWeight: 700, fontSize: '15px', opacity: generando ? 0.7 : 1,
-              }}>
-                {generando ? 'Generando...' : '✨ Generar plan'}
-              </button>
-              <button onClick={() => setModalIA(false)} disabled={generando} style={{
-                padding: '13px 20px', border: `1px solid ${C.border}`, borderRadius: '10px',
-                cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px',
-              }}>Cancelar</button>
+              <ModalPrimaryButton onClick={generarConIA} disabled={generando}>
+                {generando ? 'Generando…' : 'Generar plan'}
+              </ModalPrimaryButton>
+              <ModalSecondaryButton onClick={() => setModalIA(false)} disabled={generando}>Cancelar</ModalSecondaryButton>
             </div>
           </div>
         </div>
@@ -498,17 +499,10 @@ export default function PlanSemanal({ session }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.25rem', maxHeight: '200px', overflowY: 'auto' }}>
               {semanasExcel.map((s, i) => (
-                <div key={i} onClick={() => setSemanaElegida(s)} style={{
-                  padding: '12px 16px', borderRadius: '10px', cursor: 'pointer',
-                  border: `1px solid ${semanaElegida === s ? C.accent : C.border}`,
-                  background: semanaElegida === s ? C.accentDim : C.surfaceHigh,
-                  fontSize: '14px', fontWeight: semanaElegida === s ? 700 : 400,
-                  color: semanaElegida === s ? C.accentText : C.textSecondary,
-                  transition: 'all 0.15s',
-                }}>
+                <SemanaOption key={i} active={semanaElegida === s} onClick={() => setSemanaElegida(s)}>
                   {s.label}
                   <span style={{ fontSize: '12px', color: C.textMuted, marginLeft: '8px' }}>({s.dias.length} días)</span>
-                </div>
+                </SemanaOption>
               ))}
             </div>
             {semanaElegida && (
@@ -521,12 +515,10 @@ export default function PlanSemanal({ session }) {
               </div>
             )}
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={confirmarImport} disabled={importando || !semanaElegida} style={{ flex: 1, background: C.accent, color: 'white', border: 'none', padding: '13px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '15px', opacity: importando || !semanaElegida ? 0.5 : 1 }}>
-                {importando ? 'Importando...' : 'Importar'}
-              </button>
-              <button onClick={() => { setModalImport(false); setSemanasExcel([]) }} style={{ padding: '13px 20px', border: `1px solid ${C.border}`, borderRadius: '10px', cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px' }}>
-                Cancelar
-              </button>
+              <ModalPrimaryButton onClick={confirmarImport} disabled={importando || !semanaElegida}>
+                {importando ? 'Importando…' : 'Importar'}
+              </ModalPrimaryButton>
+              <ModalSecondaryButton onClick={() => { setModalImport(false); setSemanasExcel([]) }}>Cancelar</ModalSecondaryButton>
             </div>
           </div>
         </div>
@@ -538,7 +530,7 @@ export default function PlanSemanal({ session }) {
           <div style={{ background: C.surface, borderRadius: '20px 20px 0 0', width: '100%', maxWidth: '480px', maxHeight: '85vh', overflowY: 'auto', padding: '1.5rem' }}>
             <div style={{ width: '40px', height: '4px', background: C.border, borderRadius: '2px', margin: '0 auto 1.25rem' }} />
             <div style={{ fontSize: '11px', color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
-              {SLOT_ICONS[modal.slot]} {modal.slot}
+              {modal.slot}
             </div>
             <div style={{ fontSize: '16px', fontWeight: 700, color: C.textPrimary, marginBottom: '1.25rem' }}>
               {DIAS[modal.dia]}
@@ -555,7 +547,7 @@ export default function PlanSemanal({ session }) {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
               <div onClick={() => setForm({ ...form, is_vianda: !form.is_vianda })}
-                style={{ width: '44px', height: '24px', borderRadius: '12px', position: 'relative', cursor: 'pointer', background: form.is_vianda ? C.accent : C.border, transition: 'background 0.2s' }}>
+                style={{ width: '44px', height: '24px', borderRadius: '12px', position: 'relative', cursor: 'pointer', background: form.is_vianda ? C.accent : C.border, transition: 'background-color 0.2s' }}>
                 <div style={{ position: 'absolute', top: '3px', left: form.is_vianda ? '23px' : '3px', width: '18px', height: '18px', borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
               </div>
               <span style={{ fontSize: '13px', color: C.textSecondary }}>Usa vianda</span>
@@ -565,17 +557,70 @@ export default function PlanSemanal({ session }) {
             <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} style={{ ...inp, height: '70px', resize: 'vertical' }} />
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-              <button onClick={guardarComida} disabled={saving} style={{ flex: 1, background: C.accent, color: 'white', border: 'none', padding: '13px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '15px', opacity: saving ? 0.7 : 1 }}>
-                {saving ? 'Guardando...' : 'Guardar'}
-              </button>
-              {comidas[`${modal.dia}-${modal.slot}`] && (
-                <button onClick={eliminarComida} style={{ padding: '13px 16px', border: `1px solid ${C.red}40`, borderRadius: '10px', cursor: 'pointer', background: 'transparent', color: C.red, fontSize: '15px' }}>Eliminar</button>
-              )}
-              <button onClick={() => setModal(null)} style={{ padding: '13px 16px', border: `1px solid ${C.border}`, borderRadius: '10px', cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px' }}>Cancelar</button>
+              <ModalPrimaryButton onClick={guardarComida} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</ModalPrimaryButton>
+              {comidas[`${modal.dia}-${modal.slot}`] && <DangerButton onClick={eliminarComida}>Eliminar</DangerButton>}
+              <ModalSecondaryButton onClick={() => setModal(null)}>Cancelar</ModalSecondaryButton>
             </div>
           </div>
         </div>
       )}
     </div>
   )
+}
+
+function WeekArrow({ onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { padding: '7px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', cursor: 'pointer', background: C.surface, color: C.textSecondary },
+    { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function PartidoChip({ active, onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      flex: 1, padding: '8px 4px', borderRadius: '8px', border: `1px solid ${active ? C.yellow : C.border}`,
+      background: active ? C.yellow + '18' : 'transparent',
+      color: active ? C.yellow : C.textMuted,
+      cursor: 'pointer', fontSize: '11px', fontWeight: active ? 700 : 400,
+    },
+    { hover: active ? null : { borderColor: C.textMuted, color: C.textSecondary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function SemanaOption({ active, onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      padding: '12px 16px', borderRadius: '10px', cursor: 'pointer',
+      border: `1px solid ${active ? C.accent : C.border}`,
+      background: active ? C.accentDim : C.surfaceHigh,
+      fontSize: '14px', fontWeight: active ? 700 : 400,
+      color: active ? C.accentText : C.textSecondary,
+    },
+    { hover: active ? null : { borderColor: C.textMuted }, focus: focusRing }
+  )
+  return <div onClick={onClick} style={style} tabIndex={0} role="button" {...handlers}>{children}</div>
+}
+
+function ModalPrimaryButton({ onClick, disabled, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { flex: 1, background: C.accent, color: 'white', border: 'none', padding: '13px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '15px', opacity: disabled ? 0.6 : 1 },
+    { hover: disabled ? null : { filter: 'brightness(1.08)' }, focus: focusRing }
+  )
+  return <button onClick={onClick} disabled={disabled} style={style} {...handlers}>{children}</button>
+}
+function ModalSecondaryButton({ onClick, disabled, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { padding: '13px 20px', border: `1px solid ${C.border}`, borderRadius: '10px', cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px' },
+    { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} disabled={disabled} style={style} {...handlers}>{children}</button>
+}
+function DangerButton({ onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { padding: '13px 16px', border: `1px solid ${C.red}40`, borderRadius: '10px', cursor: 'pointer', background: 'transparent', color: C.red, fontSize: '15px' },
+    { hover: { background: C.red, color: '#fff' }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
 }

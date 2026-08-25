@@ -7,70 +7,11 @@ import Viandas from './pages/Viandas'
 import Gimnasio from './pages/Gimnasio'
 import Perfil from './pages/Perfil'
 import { programarNotificaciones } from './services/notifications'
+import { C } from './theme'
+import { IconDashboard, IconPlan, IconViandas, IconGym, IconPerfil } from './components/icons'
+import { useInteractiveStyle, focusRing } from './hooks/useInteractiveStyle'
 
-// ── Íconos SVG inline ──────────────────────────────────────────────
-function IconDashboard({ active }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-    </svg>
-  )
-}
-function IconPlan({ active }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-      <line x1="8" y1="15" x2="12" y2="15" />
-    </svg>
-  )
-}
-function IconViandas({ active }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 11l19-9-9 19-2-8-8-2z" />
-    </svg>
-  )
-}
-function IconGym({ active }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 4v16M18 4v16M3 8h3M18 8h3M3 16h3M18 16h3M6 12h12" />
-    </svg>
-  )
-}
-function IconPerfil({ active }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#6B7280'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-    </svg>
-  )
-}
-
-// ── Colores y tokens ───────────────────────────────────────────────
-const C = {
-  bg: '#0F1117',
-  surface: '#1A1D27',
-  surfaceHover: '#22263A',
-  border: '#2A2D3E',
-  accent: '#10B981',
-  accentDim: '#10B98120',
-  accentText: '#34D399',
-  blue: '#1A5276',
-  red: '#EF4444',
-  yellow: '#F59E0B',
-  textPrimary: '#F1F5F9',
-  textSecondary: '#94A3B8',
-  textMuted: '#4B5563',
-  navBg: '#13151F',
-  navHeight: '64px',
-}
+const RAIL_WIDTH = '76px'
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
@@ -90,7 +31,8 @@ const LINKS = [
   { path: '/perfil', label: 'Perfil', Icon: IconPerfil },
 ]
 
-function BottomNav({ onLogout }) {
+// ── Bottom-nav mobile — tab bar nativo, se mantiene igual (no es un tell) ──
+function BottomNav() {
   const location = useLocation()
   return (
     <nav style={{
@@ -112,7 +54,6 @@ function BottomNav({ onLogout }) {
               color: active ? C.accentText : C.textMuted,
               fontSize: '10px', fontWeight: active ? 600 : 400,
               letterSpacing: '0.02em',
-              transition: 'color 0.15s',
               position: 'relative',
             }}>
             {active && (
@@ -121,7 +62,7 @@ function BottomNav({ onLogout }) {
                 height: '2px', background: C.accent, borderRadius: '0 0 2px 2px',
               }} />
             )}
-            <Icon active={active} />
+            <Icon size={22} color={active ? C.accent : C.textMuted} />
             {label}
           </NavLink>
         )
@@ -130,10 +71,15 @@ function BottomNav({ onLogout }) {
   )
 }
 
+// ── Top bar mobile (sin nav de links — eso vive en el bottom-nav) ──
 function TopBar({ onLogout }) {
   const location = useLocation()
-  const labels = { '/': 'Dashboard', '/plan': 'Plan Semanal', '/viandas': 'Viandas', '/gimnasio': 'Gimnasio' }
+  const labels = { '/': 'Dashboard', '/plan': 'Plan Semanal', '/viandas': 'Viandas', '/gimnasio': 'Gimnasio', '/perfil': 'Perfil' }
   const title = labels[location.pathname] || 'NutriGym'
+  const { style, handlers } = useInteractiveStyle(
+    { background: 'transparent', border: `1px solid ${C.border}`, color: C.textSecondary, padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 },
+    { hover: { borderColor: C.textMuted }, focus: focusRing }
+  )
   return (
     <header style={{
       background: C.surface,
@@ -143,68 +89,71 @@ function TopBar({ onLogout }) {
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       position: 'sticky', top: 0, zIndex: 50,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontSize: '18px' }}>💪</span>
-        <span style={{ color: C.textPrimary, fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.01em' }}>
-          {title}
-        </span>
-      </div>
-      <button onClick={onLogout} style={{
-        background: 'transparent', border: `1px solid ${C.border}`,
-        color: C.textSecondary, padding: '4px 12px', borderRadius: '6px',
-        cursor: 'pointer', fontSize: '12px', fontWeight: 500,
-      }}>
-        Salir
-      </button>
+      <span style={{ color: C.textPrimary, fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.01em' }}>
+        {title}
+      </span>
+      <button onClick={onLogout} style={style} {...handlers}>Salir</button>
     </header>
   )
 }
 
-function DesktopNav({ onLogout }) {
+// ── Side-rail desktop — reemplaza el "AI nav" genérico (wordmark + links + CTA) ──
+function RailLink({ path, label, Icon, active }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+      padding: '10px 4px', borderRadius: '10px', textDecoration: 'none',
+      color: active ? C.accentText : C.textMuted,
+      fontSize: '10px', fontWeight: active ? 600 : 400,
+      width: '56px',
+    },
+    { hover: { background: C.surfaceHigh, color: C.textSecondary }, focus: focusRing }
+  )
+  return (
+    <NavLink to={path} end={path === '/'} style={style} {...handlers}>
+      <Icon size={20} color={active ? C.accent : 'currentColor'} />
+      {label}
+    </NavLink>
+  )
+}
+
+function DesktopRail({ onLogout }) {
+  const location = useLocation()
+  const { style: logoutStyle, handlers: logoutHandlers } = useInteractiveStyle(
+    { background: 'transparent', border: 'none', color: C.textMuted, padding: '8px', borderRadius: '8px', cursor: 'pointer' },
+    { hover: { background: C.redDim, color: C.red }, focus: focusRing }
+  )
   return (
     <nav style={{
-      background: C.surface,
-      borderBottom: `1px solid ${C.border}`,
-      padding: '0 2rem',
-      height: '56px',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      position: 'sticky', top: 0, zIndex: 100,
+      position: 'fixed', top: 0, left: 0, bottom: 0, width: RAIL_WIDTH,
+      background: C.surface, borderRight: `1px solid ${C.border}`,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: '1.25rem 0', zIndex: 100,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ fontSize: '20px' }}>💪</span>
-        <span style={{ color: C.textPrimary, fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>
-          NutriGym <span style={{ color: C.accentText }}>Tracker</span>
-        </span>
+      <div style={{
+        width: '36px', height: '36px', borderRadius: '10px', background: C.accentDim,
+        border: `1px solid ${C.accent}40`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        marginBottom: '1.75rem',
+      }}>
+        <IconGym size={18} color={C.accent} />
       </div>
-      <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
-        {LINKS.map(({ path, label }) => (
-          <NavLink key={path} to={path} end={path === '/'}
-            style={({ isActive }) => ({
-              color: isActive ? C.accentText : C.textSecondary,
-              textDecoration: 'none', fontSize: '0.875rem',
-              fontWeight: isActive ? 600 : 400,
-              padding: '6px 14px', borderRadius: '6px',
-              background: isActive ? C.accentDim : 'transparent',
-              transition: 'all 0.15s',
-            })}>
-            {label}
-          </NavLink>
-        ))}
-        <button onClick={onLogout} style={{
-          marginLeft: '0.75rem',
-          background: 'transparent', border: `1px solid ${C.border}`,
-          color: C.textSecondary, padding: '5px 14px', borderRadius: '6px',
-          cursor: 'pointer', fontSize: '0.85rem',
-        }}>
-          Salir
-        </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+        {LINKS.map(({ path, label, Icon }) => {
+          const active = path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
+          return <RailLink key={path} path={path} label={label} Icon={Icon} active={active} />
+        })}
       </div>
+      <button onClick={onLogout} style={logoutStyle} {...logoutHandlers} title="Salir" aria-label="Salir">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" />
+        </svg>
+      </button>
     </nav>
   )
 }
 
 // ── Login / Registro ───────────────────────────────────────────────
-function AuthScreen({ }) {
+function AuthScreen() {
   const [modo, setModo] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -212,6 +161,7 @@ function AuthScreen({ }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [mensaje, setMensaje] = useState('')
+  const isMobile = useIsMobile()
 
   function cambiarModo(m) {
     setModo(m); setError(''); setMensaje(''); setEmail(''); setPassword(''); setPasswordConfirm('')
@@ -242,82 +192,139 @@ function AuthScreen({ }) {
     width: '100%', padding: '12px 14px', boxSizing: 'border-box',
     background: C.surface, border: `1px solid ${C.border}`,
     borderRadius: '10px', color: C.textPrimary, fontSize: '15px',
-    outline: 'none', transition: 'border-color 0.15s',
+    outline: 'none',
   }
 
+  const SubmitButton = () => {
+    const { style, handlers } = useInteractiveStyle(
+      {
+        width: '100%', padding: '13px',
+        background: modo === 'login' ? C.accent : C.blue,
+        color: 'white', border: 'none', borderRadius: '10px',
+        cursor: loading ? 'wait' : 'pointer', fontSize: '1rem', fontWeight: 700,
+        marginTop: '4px', letterSpacing: '-0.01em',
+        opacity: loading ? 0.7 : 1,
+      },
+      { hover: loading ? null : { filter: 'brightness(1.08)' }, focus: focusRing }
+    )
+    return (
+      <button type="submit" disabled={loading} style={style} {...handlers}>
+        {loading ? 'Cargando...' : modo === 'login' ? 'Ingresar' : 'Crear cuenta'}
+      </button>
+    )
+  }
+
+  const ToggleButton = ({ m, label }) => {
+    const { style, handlers } = useInteractiveStyle(
+      {
+        flex: 1, padding: '9px', border: 'none', borderRadius: '7px', cursor: 'pointer',
+        background: modo === m ? C.accent : 'transparent',
+        color: modo === m ? '#fff' : C.textSecondary,
+        fontWeight: modo === m ? 700 : 400, fontSize: '0.9rem',
+      },
+      { focus: focusRing }
+    )
+    return <button key={m} onClick={() => cambiarModo(m)} style={style} {...handlers}>{label}</button>
+  }
+
+  const form = (
+    <form onSubmit={modo === 'login' ? handleLogin : handleRegistro} style={{ width: '100%' }}>
+      <div style={{
+        display: 'flex', background: C.surface, borderRadius: '10px',
+        padding: '4px', marginBottom: '1.5rem', border: `1px solid ${C.border}`,
+      }}>
+        <ToggleButton m="login" label="Ingresar" />
+        <ToggleButton m="registro" label="Crear cuenta" />
+      </div>
+
+      {error && (
+        <div style={{ background: '#EF444420', border: '1px solid #EF4444', borderRadius: '8px', padding: '10px 14px', marginBottom: '1rem', color: '#FCA5A5', fontSize: '0.875rem' }}>
+          {error}
+        </div>
+      )}
+      {mensaje && (
+        <div style={{ background: C.accentDim, border: `1px solid ${C.accent}`, borderRadius: '8px', padding: '10px 14px', marginBottom: '1rem', color: C.accentText, fontSize: '0.875rem' }}>
+          {mensaje}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div>
+          <label style={{ color: C.textSecondary, fontSize: '13px', fontWeight: 500, display: 'block', marginBottom: '6px' }}>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={inp} required placeholder="tu@email.com" />
+        </div>
+        <div>
+          <label style={{ color: C.textSecondary, fontSize: '13px', fontWeight: 500, display: 'block', marginBottom: '6px' }}>Contraseña</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inp} required placeholder="••••••••" />
+        </div>
+        {modo === 'registro' && (
+          <div>
+            <label style={{ color: C.textSecondary, fontSize: '13px', fontWeight: 500, display: 'block', marginBottom: '6px' }}>Confirmar contraseña</label>
+            <input type="password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} style={inp} required placeholder="••••••••" />
+          </div>
+        )}
+        <SubmitButton />
+      </div>
+    </form>
+  )
+
+  if (isMobile) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: C.bg,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '1.5rem', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      }}>
+        <div style={{ width: '100%', maxWidth: '380px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <div style={{
+              width: '52px', height: '52px', borderRadius: '14px', background: C.accentDim,
+              border: `1px solid ${C.accent}40`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 14px',
+            }}>
+              <IconGym size={26} color={C.accent} />
+            </div>
+            <h1 style={{ color: C.textPrimary, margin: 0, fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
+              NutriGym<span style={{ color: C.accentText }}> Tracker</span>
+            </h1>
+            <p style={{ color: C.textSecondary, margin: '6px 0 0', fontSize: '0.875rem' }}>
+              Tu seguimiento de nutrición y entrenamiento
+            </p>
+          </div>
+          {form}
+        </div>
+      </div>
+    )
+  }
+
+  // Desktop: panel de marca a la izquierda (sesga el layout, rompe el centrado total),
+  // formulario a la derecha en su propia columna angosta.
   return (
     <div style={{
-      minHeight: '100vh', background: C.bg,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '1.5rem', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      minHeight: '100vh', background: C.bg, display: 'flex',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     }}>
-      <div style={{ width: '100%', maxWidth: '380px' }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>💪</div>
-          <h1 style={{ color: C.textPrimary, margin: 0, fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
-            NutriGym<span style={{ color: C.accentText }}> Tracker</span>
-          </h1>
-          <p style={{ color: C.textSecondary, margin: '6px 0 0', fontSize: '0.9rem' }}>
-            Tu seguimiento de nutrición y entrenamiento
-          </p>
-        </div>
-
-        {/* Toggle */}
+      <div style={{
+        flex: '1 1 55%', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        padding: '4rem', borderRight: `1px solid ${C.border}`,
+        background: C.surface,
+      }}>
         <div style={{
-          display: 'flex', background: C.surface, borderRadius: '10px',
-          padding: '4px', marginBottom: '1.5rem', border: `1px solid ${C.border}`,
+          width: '56px', height: '56px', borderRadius: '16px', background: C.accentDim,
+          border: `1px solid ${C.accent}40`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          marginBottom: '1.5rem',
         }}>
-          {[['login', 'Ingresar'], ['registro', 'Crear cuenta']].map(([m, label]) => (
-            <button key={m} onClick={() => cambiarModo(m)} style={{
-              flex: 1, padding: '9px', border: 'none', borderRadius: '7px', cursor: 'pointer',
-              background: modo === m ? C.accent : 'transparent',
-              color: modo === m ? '#fff' : C.textSecondary,
-              fontWeight: modo === m ? 700 : 400, fontSize: '0.9rem',
-              transition: 'all 0.15s',
-            }}>{label}</button>
-          ))}
+          <IconGym size={28} color={C.accent} />
         </div>
-
-        {error && (
-          <div style={{ background: '#EF444420', border: '1px solid #EF4444', borderRadius: '8px', padding: '10px 14px', marginBottom: '1rem', color: '#FCA5A5', fontSize: '0.875rem' }}>
-            {error}
-          </div>
-        )}
-        {mensaje && (
-          <div style={{ background: C.accentDim, border: `1px solid ${C.accent}`, borderRadius: '8px', padding: '10px 14px', marginBottom: '1rem', color: C.accentText, fontSize: '0.875rem' }}>
-            {mensaje}
-          </div>
-        )}
-
-        <form onSubmit={modo === 'login' ? handleLogin : handleRegistro}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div>
-              <label style={{ color: C.textSecondary, fontSize: '13px', fontWeight: 500, display: 'block', marginBottom: '6px' }}>Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={inp} required placeholder="tu@email.com" />
-            </div>
-            <div>
-              <label style={{ color: C.textSecondary, fontSize: '13px', fontWeight: 500, display: 'block', marginBottom: '6px' }}>Contraseña</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inp} required placeholder="••••••••" />
-            </div>
-            {modo === 'registro' && (
-              <div>
-                <label style={{ color: C.textSecondary, fontSize: '13px', fontWeight: 500, display: 'block', marginBottom: '6px' }}>Confirmar contraseña</label>
-                <input type="password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} style={inp} required placeholder="••••••••" />
-              </div>
-            )}
-            <button type="submit" disabled={loading} style={{
-              width: '100%', padding: '13px',
-              background: modo === 'login' ? C.accent : '#1A5276',
-              color: 'white', border: 'none', borderRadius: '10px',
-              cursor: loading ? 'wait' : 'pointer', fontSize: '1rem', fontWeight: 700,
-              marginTop: '4px', letterSpacing: '-0.01em',
-              opacity: loading ? 0.7 : 1, transition: 'opacity 0.15s',
-            }}>
-              {loading ? 'Cargando...' : modo === 'login' ? 'Ingresar' : 'Crear cuenta'}
-            </button>
-          </div>
-        </form>
+        <h1 style={{ color: C.textPrimary, margin: 0, fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.03em', maxWidth: '420px' }}>
+          NutriGym<span style={{ color: C.accentText }}> Tracker</span>
+        </h1>
+        <p style={{ color: C.textSecondary, margin: '10px 0 0', fontSize: '1rem', maxWidth: '360px', lineHeight: 1.5 }}>
+          Plan semanal, viandas y entrenamiento en un solo lugar — sin depender de una app genérica.
+        </p>
+      </div>
+      <div style={{ flex: '1 1 45%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+        <div style={{ width: '100%', maxWidth: '360px' }}>{form}</div>
       </div>
     </div>
   )
@@ -334,12 +341,12 @@ function AppLayout({ session, onLogout }) {
       background: C.bg,
       color: C.textPrimary,
     }}>
-      {isMobile ? <TopBar onLogout={onLogout} /> : <DesktopNav onLogout={onLogout} />}
+      {isMobile ? <TopBar onLogout={onLogout} /> : <DesktopRail onLogout={onLogout} />}
 
       <main style={{
-        padding: isMobile ? '1rem 1rem calc(1rem + 64px)' : '1.5rem 2rem',
-        maxWidth: isMobile ? '100%' : '1100px',
-        margin: '0 auto',
+        padding: isMobile ? '1rem 1rem calc(1rem + 64px)' : '2rem 2.5rem',
+        maxWidth: isMobile ? '100%' : '1000px',
+        marginLeft: isMobile ? 0 : RAIL_WIDTH,
       }}>
         <Routes>
           <Route path="/" element={<Dashboard session={session} />} />
@@ -351,7 +358,7 @@ function AppLayout({ session, onLogout }) {
         </Routes>
       </main>
 
-      {isMobile && <BottomNav onLogout={onLogout} />}
+      {isMobile && <BottomNav />}
     </div>
   )
 }
@@ -363,7 +370,6 @@ function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session) {
-        // Programar notificaciones al iniciar sesión
         supabase.from('user_profile').select('*').eq('user_id', session.user.id).single()
           .then(({ data }) => { if (data) programarNotificaciones(data) })
       }

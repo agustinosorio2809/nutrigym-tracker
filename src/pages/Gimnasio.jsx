@@ -1,15 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { C } from '../theme'
+import { IconPlan, IconTrash, IconGym, IconCheck, IconClose } from '../components/icons'
+import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
 
 const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
-
-const C = {
-  bg: '#0F1117', surface: '#1A1D27', surfaceHigh: '#22263A',
-  border: '#2A2D3E', accent: '#10B981', accentDim: '#10B98118',
-  accentText: '#34D399', blue: '#3B82F6', blueDim: '#3B82F618',
-  red: '#EF4444', redDim: '#EF444418', yellow: '#F59E0B',
-  textPrimary: '#F1F5F9', textSecondary: '#94A3B8', textMuted: '#4B5563',
-}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
@@ -19,6 +14,19 @@ function useIsMobile() {
     return () => window.removeEventListener('resize', handler)
   }, [])
   return isMobile
+}
+
+function TabButton({ active, onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      padding: '8px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+      background: active ? C.accent : C.surface,
+      color: active ? '#fff' : C.textSecondary,
+      fontWeight: active ? 700 : 400, fontSize: '14px',
+    },
+    { hover: active ? null : { background: C.surfaceHigh, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
 }
 
 export default function Gimnasio({ session }) {
@@ -114,20 +122,11 @@ export default function Gimnasio({ session }) {
     background: C.surfaceHigh, color: C.textPrimary, fontSize: '14px', outline: 'none',
   }
 
-  const tabBtn = (key, label) => (
-    <button key={key} onClick={() => setVista(key)} style={{
-      padding: '8px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-      background: vista === key ? C.accent : C.surface,
-      color: vista === key ? '#fff' : C.textSecondary,
-      fontWeight: vista === key ? 700 : 400, fontSize: '14px', transition: 'all 0.15s',
-    }}>{label}</button>
-  )
-
   return (
     <div style={{ color: C.textPrimary }}>
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem' }}>
-        {tabBtn('hoy', 'Hoy')}
-        {tabBtn('historial', 'Historial')}
+        <TabButton active={vista === 'hoy'} onClick={() => setVista('hoy')}>Hoy</TabButton>
+        <TabButton active={vista === 'historial'} onClick={() => setVista('historial')}>Historial</TabButton>
       </div>
 
       {/* ══ HOY ══ */}
@@ -135,7 +134,7 @@ export default function Gimnasio({ session }) {
         <div>
           <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '1rem' }}>Entrenamiento de hoy</div>
 
-          {/* Card sesión */}
+          {/* Sigue siendo card: es un formulario editable */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
             <div style={{ fontSize: '12px', color: C.textMuted, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Tipo de rutina</div>
             <select value={formSesion.routine_type} onChange={e => setFormSesion({ ...formSesion, routine_type: e.target.value })}
@@ -149,7 +148,7 @@ export default function Gimnasio({ session }) {
                 <div onClick={() => setFormSesion({ ...formSesion, completed: !formSesion.completed })}
                   style={{
                     width: '44px', height: '24px', borderRadius: '12px', position: 'relative', cursor: 'pointer',
-                    background: formSesion.completed ? C.accent : C.border, transition: 'background 0.2s',
+                    background: formSesion.completed ? C.accent : C.border, transition: 'background-color 0.2s',
                   }}>
                   <div style={{
                     position: 'absolute', top: '3px', left: formSesion.completed ? '23px' : '3px',
@@ -159,17 +158,12 @@ export default function Gimnasio({ session }) {
                 </div>
                 <span style={{ fontSize: '13px', color: C.textSecondary }}>Sesión completada</span>
               </label>
-              <button onClick={guardarSesion} disabled={saving} style={{
-                background: C.accent, color: 'white', border: 'none',
-                padding: '9px 20px', borderRadius: '8px', cursor: 'pointer',
-                fontWeight: 700, fontSize: '14px', opacity: saving ? 0.7 : 1,
-              }}>
-                {saving ? 'Guardando...' : sesionHoy ? 'Actualizar' : 'Crear sesión'}
-              </button>
+              <PrimarySmallButton onClick={guardarSesion} disabled={saving}>
+                {saving ? 'Guardando…' : sesionHoy ? 'Actualizar' : 'Crear sesión'}
+              </PrimarySmallButton>
             </div>
           </div>
 
-          {/* Ejercicios */}
           {sesionHoy && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
@@ -178,42 +172,33 @@ export default function Gimnasio({ session }) {
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {formSesion.routine_type && (
-                    <button onClick={cargarPlantilla} disabled={cargandoPlantilla} style={{
-                      background: C.blueDim, color: C.blue, border: `1px solid ${C.blue}40`,
-                      padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 500,
-                    }}>
-                      {cargandoPlantilla ? 'Cargando...' : '📋 Plantilla'}
-                    </button>
+                    <ActionButton onClick={cargarPlantilla} disabled={cargandoPlantilla} tone="blue">
+                      <IconPlan size={13} />{cargandoPlantilla ? 'Cargando…' : 'Plantilla'}
+                    </ActionButton>
                   )}
                   {ejercicios.length > 0 && (
-                    <button onClick={limpiarEjercicios} style={{
-                      background: '#EF444415', color: C.red, border: `1px solid ${C.red}40`,
-                      padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-                    }}>🗑 Limpiar</button>
+                    <ActionButton onClick={limpiarEjercicios} tone="red"><IconTrash size={13} />Limpiar</ActionButton>
                   )}
-                  <button onClick={abrirNuevoEj} style={{
-                    background: C.accent, color: 'white', border: 'none',
-                    padding: '7px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '14px',
-                  }}>+ Agregar</button>
+                  <PrimarySmallButton onClick={abrirNuevoEj}>+ Agregar</PrimarySmallButton>
                 </div>
               </div>
 
               {ejercicios.length === 0 ? (
                 <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
-                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>💪</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}><IconGym size={28} color={C.textMuted} /></div>
                   <div style={{ color: C.textMuted, fontSize: '14px' }}>
                     Sin ejercicios.{formSesion.routine_type && ' Tocá Plantilla para cargar los ejercicios.'}
                   </div>
                 </div>
               ) : isMobile ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div>
                   {ejercicios.map(ej => (
-                    <div key={ej.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '14px 16px' }}>
+                    <div key={ej.id} style={{ padding: '14px 4px', borderBottom: `1px solid ${C.border}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                         <div style={{ fontWeight: 600, fontSize: '14px', color: C.textPrimary }}>{ej.exercise_name}</div>
                         <div style={{ display: 'flex', gap: '6px' }}>
-                          <button onClick={() => abrirEditarEj(ej)} style={{ fontSize: '12px', border: `1px solid ${C.border}`, padding: '3px 10px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', color: C.textSecondary }}>Editar</button>
-                          <button onClick={() => eliminarEjercicio(ej.id)} style={{ fontSize: '12px', border: `1px solid ${C.red}40`, color: C.red, padding: '3px 10px', borderRadius: '6px', cursor: 'pointer', background: 'transparent' }}>✕</button>
+                          <TinyGhostButton onClick={() => abrirEditarEj(ej)}>Editar</TinyGhostButton>
+                          <TinyDangerButton onClick={() => eliminarEjercicio(ej.id)}><IconClose size={11} /></TinyDangerButton>
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -242,13 +227,13 @@ export default function Gimnasio({ session }) {
                           <td style={{ padding: '12px 14px', fontWeight: 600, color: C.textPrimary }}>{ej.exercise_name}</td>
                           <td style={{ padding: '12px 14px', color: C.textSecondary }}>{ej.sets || '—'}</td>
                           <td style={{ padding: '12px 14px', color: C.textSecondary }}>{ej.reps || '—'}</td>
-                          <td style={{ padding: '12px 14px', color: C.accentText, fontWeight: 600 }}>{ej.weight_kg ? `${ej.weight_kg} kg` : '—'}</td>
+                          <td style={{ padding: '12px 14px', color: C.accentText, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{ej.weight_kg ? `${ej.weight_kg} kg` : '—'}</td>
                           <td style={{ padding: '12px 14px', color: C.textSecondary }}>{ej.rir ?? '—'}</td>
                           <td style={{ padding: '12px 14px', color: C.textMuted, fontSize: '12px' }}>{ej.notes || ''}</td>
                           <td style={{ padding: '12px 14px' }}>
                             <div style={{ display: 'flex', gap: '6px' }}>
-                              <button onClick={() => abrirEditarEj(ej)} style={{ fontSize: '12px', border: `1px solid ${C.border}`, padding: '3px 10px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', color: C.textSecondary }}>Editar</button>
-                              <button onClick={() => eliminarEjercicio(ej.id)} style={{ fontSize: '12px', border: `1px solid ${C.red}40`, color: C.red, padding: '3px 10px', borderRadius: '6px', cursor: 'pointer', background: 'transparent' }}>✕</button>
+                              <TinyGhostButton onClick={() => abrirEditarEj(ej)}>Editar</TinyGhostButton>
+                              <TinyDangerButton onClick={() => eliminarEjercicio(ej.id)}><IconClose size={11} /></TinyDangerButton>
                             </div>
                           </td>
                         </tr>
@@ -269,9 +254,9 @@ export default function Gimnasio({ session }) {
           {sesiones.length === 0 ? (
             <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>Sin entrenamientos registrados.</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div>
               {sesiones.map(s => (
-                <div key={s.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '14px 16px' }}>
+                <div key={s.id} style={{ padding: '14px 4px', borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '14px', color: C.textPrimary }}>
@@ -282,12 +267,14 @@ export default function Gimnasio({ session }) {
                       )}
                     </div>
                     <span style={{
+                      display: 'flex', alignItems: 'center', gap: '4px',
                       fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px',
                       background: s.completed ? C.accentDim : C.surfaceHigh,
                       color: s.completed ? C.accentText : C.textMuted,
                       border: `1px solid ${s.completed ? C.accent + '40' : C.border}`,
                     }}>
-                      {s.completed ? '✓ Completado' : 'Incompleto'}
+                      {s.completed && <IconCheck size={10} color={C.accentText} />}
+                      {s.completed ? 'Completado' : 'Incompleto'}
                     </span>
                   </div>
                   {s.gym_exercises?.length > 0 && (
@@ -332,17 +319,8 @@ export default function Gimnasio({ session }) {
             <textarea value={formEj.notes} onChange={e => setFormEj({ ...formEj, notes: e.target.value })} style={{ ...inp, height: '60px', resize: 'vertical' }} />
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-              <button onClick={guardarEjercicio} disabled={saving || !formEj.exercise_name} style={{
-                flex: 1, background: C.accent, color: 'white', border: 'none',
-                padding: '13px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '15px',
-                opacity: saving || !formEj.exercise_name ? 0.5 : 1,
-              }}>
-                {saving ? 'Guardando...' : 'Guardar'}
-              </button>
-              <button onClick={() => setModalEj(null)} style={{
-                padding: '13px 20px', border: `1px solid ${C.border}`, borderRadius: '10px',
-                cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px',
-              }}>Cancelar</button>
+              <ModalPrimaryButton onClick={guardarEjercicio} disabled={saving || !formEj.exercise_name}>{saving ? 'Guardando…' : 'Guardar'}</ModalPrimaryButton>
+              <ModalSecondaryButton onClick={() => setModalEj(null)}>Cancelar</ModalSecondaryButton>
             </div>
           </div>
         </div>
@@ -353,9 +331,61 @@ export default function Gimnasio({ session }) {
 
 function Pill({ label, value, accent }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: accent ? '#10B98118' : '#22263A', borderRadius: '8px', padding: '4px 12px', minWidth: '44px' }}>
-      <span style={{ fontSize: '14px', fontWeight: 700, color: accent ? '#34D399' : '#F1F5F9' }}>{value}</span>
-      <span style={{ fontSize: '10px', color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: accent ? C.accentDim : C.surfaceHigh, borderRadius: '8px', padding: '4px 12px', minWidth: '44px' }}>
+      <span style={{ fontSize: '14px', fontWeight: 700, color: accent ? C.accentText : C.textPrimary, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      <span style={{ fontSize: '10px', color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
     </div>
   )
+}
+
+function PrimarySmallButton({ onClick, disabled, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { background: C.accent, color: 'white', border: 'none', padding: '9px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '14px', opacity: disabled ? 0.7 : 1 },
+    { hover: disabled ? null : { filter: 'brightness(1.08)' }, focus: focusRing }
+  )
+  return <button onClick={onClick} disabled={disabled} style={style} {...handlers}>{children}</button>
+}
+
+function ActionButton({ onClick, disabled, tone = 'default', children }) {
+  const tones = {
+    blue: { base: { background: C.blueDim, color: C.blue, border: `1px solid ${C.blue}40` }, hover: { background: C.blue, color: '#fff' } },
+    red: { base: { background: '#EF444415', color: C.red, border: `1px solid ${C.red}40` }, hover: { background: C.red, color: '#fff' } },
+  }
+  const t = tones[tone]
+  const { style, handlers } = useInteractiveStyle(
+    { ...t.base, display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, opacity: disabled ? 0.7 : 1 },
+    { hover: disabled ? null : t.hover, focus: focusRing }
+  )
+  return <button onClick={onClick} disabled={disabled} style={style} {...handlers}>{children}</button>
+}
+
+function TinyGhostButton({ onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { fontSize: '12px', border: `1px solid ${C.border}`, padding: '3px 10px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', color: C.textSecondary },
+    { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function TinyDangerButton({ onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { display: 'flex', alignItems: 'center', fontSize: '12px', border: `1px solid ${C.red}40`, color: C.red, padding: '3px 8px', borderRadius: '6px', cursor: 'pointer', background: 'transparent' },
+    { hover: { background: C.red, color: '#fff' }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function ModalPrimaryButton({ onClick, disabled, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { flex: 1, background: C.accent, color: 'white', border: 'none', padding: '13px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '15px', opacity: disabled ? 0.5 : 1 },
+    { hover: disabled ? null : { filter: 'brightness(1.08)' }, focus: focusRing }
+  )
+  return <button onClick={onClick} disabled={disabled} style={style} {...handlers}>{children}</button>
+}
+function ModalSecondaryButton({ onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { padding: '13px 20px', border: `1px solid ${C.border}`, borderRadius: '10px', cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px' },
+    { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
 }

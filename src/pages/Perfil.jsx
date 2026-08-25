@@ -1,14 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { programarNotificaciones } from '../services/notifications'
-
-const C = {
-  bg: '#0F1117', surface: '#1A1D27', surfaceHigh: '#22263A',
-  border: '#2A2D3E', accent: '#10B981', accentDim: '#10B98118',
-  accentText: '#34D399', blue: '#3B82F6', blueDim: '#3B82F618',
-  red: '#EF4444', yellow: '#F59E0B',
-  textPrimary: '#F1F5F9', textSecondary: '#94A3B8', textMuted: '#4B5563',
-}
+import { C } from '../theme'
+import { IconChart, IconGym, IconSalad, IconBell, IconCheck, IconSunrise, IconMoon } from '../components/icons'
+import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
 
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes']
 const DIAS_LABELS = { lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue', viernes: 'Vie' }
@@ -94,14 +89,20 @@ export default function Perfil({ session }) {
     background: C.surfaceHigh, color: C.textPrimary, fontSize: '14px', outline: 'none',
   }
 
-  if (loading) return <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>Cargando...</div>
+  if (loading) return <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>Cargando…</div>
+
+  const OBJETIVOS = [['recomposicion', 'Recomposición'], ['definicion', 'Definición'], ['volumen', 'Volumen']]
+  const NOTIFS = [
+    { key: 'almuerzo', label: 'Recordatorio almuerzo', Icon: IconSunrise, activaKey: 'notif_almuerzo_activa', horaKey: 'notif_almuerzo_hora' },
+    { key: 'cena', label: 'Recordatorio cena', Icon: IconMoon, activaKey: 'notif_cena_activa', horaKey: 'notif_cena_hora' },
+    { key: 'gym', label: 'Recordatorio gym', Icon: IconGym, activaKey: 'notif_gym_activa', horaKey: 'notif_gym_hora' },
+  ]
 
   return (
     <div style={{ color: C.textPrimary, maxWidth: '480px' }}>
       <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '1.5rem' }}>Mi Perfil</div>
 
-      {/* Datos físicos */}
-      <Section title="Datos físicos" icon="📊">
+      <Section title="Datos físicos" Icon={IconChart}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <div>
             <label style={labelStyle}>Peso actual (kg)</label>
@@ -118,36 +119,20 @@ export default function Perfil({ session }) {
         <div style={{ marginTop: '12px' }}>
           <label style={labelStyle}>Objetivo</label>
           <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
-            {[['recomposicion', '⚡ Recomposición'], ['definicion', '🔥 Definición'], ['volumen', '💪 Volumen']].map(([val, label]) => (
-              <button key={val} onClick={() => setForm({ ...form, objetivo: val })} style={{
-                padding: '7px 14px', borderRadius: '20px', border: `1px solid ${form.objetivo === val ? C.accent : C.border}`,
-                background: form.objetivo === val ? C.accentDim : 'transparent',
-                color: form.objetivo === val ? C.accentText : C.textSecondary,
-                cursor: 'pointer', fontSize: '13px', fontWeight: form.objetivo === val ? 700 : 400,
-                transition: 'all 0.15s',
-              }}>{label}</button>
+            {OBJETIVOS.map(([val, label]) => (
+              <PillToggle key={val} active={form.objetivo === val} onClick={() => setForm({ ...form, objetivo: val })}>{label}</PillToggle>
             ))}
           </div>
         </div>
       </Section>
 
-      {/* Entrenamiento */}
-      <Section title="Entrenamiento" icon="🏋️">
+      <Section title="Entrenamiento" Icon={IconGym}>
         <div>
           <label style={labelStyle}>Días de gimnasio</label>
           <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-            {DIAS_SEMANA.map(dia => {
-              const activo = form.dias_entreno.includes(dia)
-              return (
-                <button key={dia} onClick={() => toggleDia(dia)} style={{
-                  flex: 1, padding: '8px 4px', borderRadius: '8px', border: `1px solid ${activo ? C.accent : C.border}`,
-                  background: activo ? C.accentDim : 'transparent',
-                  color: activo ? C.accentText : C.textMuted,
-                  cursor: 'pointer', fontSize: '12px', fontWeight: activo ? 700 : 400,
-                  transition: 'all 0.15s',
-                }}>{DIAS_LABELS[dia]}</button>
-              )
-            })}
+            {DIAS_SEMANA.map(dia => (
+              <DiaToggle key={dia} active={form.dias_entreno.includes(dia)} onClick={() => toggleDia(dia)}>{DIAS_LABELS[dia]}</DiaToggle>
+            ))}
           </div>
         </div>
 
@@ -155,21 +140,15 @@ export default function Perfil({ session }) {
           <label style={labelStyle}>Día habitual de partido (futsal)</label>
           <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
             {[...DIAS_SEMANA, 'ninguno'].map(dia => (
-              <button key={dia} onClick={() => setForm({ ...form, dia_partido: dia })} style={{
-                flex: 1, padding: '8px 4px', borderRadius: '8px',
-                border: `1px solid ${form.dia_partido === dia ? (dia === 'ninguno' ? C.border : C.yellow) : C.border}`,
-                background: form.dia_partido === dia ? (dia === 'ninguno' ? C.surfaceHigh : C.yellow + '18') : 'transparent',
-                color: form.dia_partido === dia ? (dia === 'ninguno' ? C.textSecondary : C.yellow) : C.textMuted,
-                cursor: 'pointer', fontSize: '11px', fontWeight: form.dia_partido === dia ? 700 : 400,
-                transition: 'all 0.15s',
-              }}>{dia === 'ninguno' ? 'Ninguno' : DIAS_LABELS[dia]}</button>
+              <PartidoToggle key={dia} active={form.dia_partido === dia} isNone={dia === 'ninguno'} onClick={() => setForm({ ...form, dia_partido: dia })}>
+                {dia === 'ninguno' ? 'Ninguno' : DIAS_LABELS[dia]}
+              </PartidoToggle>
             ))}
           </div>
         </div>
       </Section>
 
-      {/* Restricciones */}
-      <Section title="Alimentación" icon="🥗">
+      <Section title="Alimentación" Icon={IconSalad}>
         <div>
           <label style={labelStyle}>Restricciones alimentarias</label>
           <textarea value={form.restricciones} onChange={e => setForm({ ...form, restricciones: e.target.value })}
@@ -180,23 +159,18 @@ export default function Perfil({ session }) {
           <label style={labelStyle}>Notas extra para el plan</label>
           <textarea value={form.notas_extra} onChange={e => setForm({ ...form, notas_extra: e.target.value })}
             style={{ ...inp, height: '70px', resize: 'vertical', marginTop: '6px' }}
-            placeholder="Ej: Prefiero cenas livianas, no me gustan las legumbres..." />
+            placeholder="Ej: Prefiero cenas livianas, no me gustan las legumbres…" />
         </div>
       </Section>
 
-      {/* Notificaciones */}
-      <Section title="Notificaciones" icon="🔔">
-        {[
-          { key: 'almuerzo', label: 'Recordatorio almuerzo', emoji: '🍽️', activaKey: 'notif_almuerzo_activa', horaKey: 'notif_almuerzo_hora' },
-          { key: 'cena', label: 'Recordatorio cena', emoji: '🌙', activaKey: 'notif_cena_activa', horaKey: 'notif_cena_hora' },
-          { key: 'gym', label: 'Recordatorio gym', emoji: '💪', activaKey: 'notif_gym_activa', horaKey: 'notif_gym_hora' },
-        ].map(({ key, label, emoji, activaKey, horaKey }) => (
+      <Section title="Notificaciones" Icon={IconBell}>
+        {NOTIFS.map(({ key, label, Icon, activaKey, horaKey }) => (
           <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div onClick={() => setForm({ ...form, [activaKey]: !form[activaKey] })}
                 style={{
                   width: '44px', height: '24px', borderRadius: '12px', position: 'relative', cursor: 'pointer',
-                  background: form[activaKey] ? C.accent : C.border, transition: 'background 0.2s', flexShrink: 0,
+                  background: form[activaKey] ? C.accent : C.border, transition: 'background-color 0.2s', flexShrink: 0,
                 }}>
                 <div style={{
                   position: 'absolute', top: '3px', left: form[activaKey] ? '23px' : '3px',
@@ -204,8 +178,8 @@ export default function Perfil({ session }) {
                   transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 }} />
               </div>
-              <span style={{ fontSize: '13px', color: form[activaKey] ? C.textPrimary : C.textMuted }}>
-                {emoji} {label}
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: form[activaKey] ? C.textPrimary : C.textMuted }}>
+                <Icon size={13} color={form[activaKey] ? C.textSecondary : C.textMuted} />{label}
               </span>
             </div>
             <input type="time" value={form[horaKey]} onChange={e => setForm({ ...form, [horaKey]: e.target.value })}
@@ -221,16 +195,7 @@ export default function Perfil({ session }) {
         </div>
       </Section>
 
-      {/* Botón guardar */}
-      <button onClick={guardar} disabled={saving} style={{
-        width: '100%', padding: '13px', background: saved ? '#059669' : C.accent,
-        color: 'white', border: 'none', borderRadius: '10px',
-        cursor: saving ? 'wait' : 'pointer', fontWeight: 700, fontSize: '15px',
-        opacity: saving ? 0.7 : 1, transition: 'background 0.3s',
-        marginTop: '8px',
-      }}>
-        {saving ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar perfil'}
-      </button>
+      <GuardarButton onClick={guardar} disabled={saving} saved={saved} saving={saving} />
 
       <div style={{ fontSize: '12px', color: C.textMuted, marginTop: '10px', textAlign: 'center' }}>
         El generador de plan semanal con IA usará estos datos automáticamente.
@@ -239,14 +204,14 @@ export default function Perfil({ session }) {
   )
 }
 
-function Section({ title, icon, children }) {
+function Section({ title, Icon, children }) {
   return (
     <div style={{
       background: C.surface, border: `1px solid ${C.border}`,
       borderRadius: '14px', padding: '1rem 1.25rem', marginBottom: '12px',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-        <span style={{ fontSize: '16px' }}>{icon}</span>
+        <Icon size={16} color={C.accent} />
         <span style={{ fontWeight: 700, fontSize: '14px', color: C.textPrimary }}>{title}</span>
       </div>
       {children}
@@ -254,5 +219,64 @@ function Section({ title, icon, children }) {
   )
 }
 
-const C_ref = { textMuted: '#4B5563' }
+function PillToggle({ active, onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      padding: '7px 14px', borderRadius: '20px', border: `1px solid ${active ? C.accent : C.border}`,
+      background: active ? C.accentDim : 'transparent',
+      color: active ? C.accentText : C.textSecondary,
+      cursor: 'pointer', fontSize: '13px', fontWeight: active ? 700 : 400,
+    },
+    { hover: active ? null : { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function DiaToggle({ active, onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      flex: 1, padding: '8px 4px', borderRadius: '8px', border: `1px solid ${active ? C.accent : C.border}`,
+      background: active ? C.accentDim : 'transparent',
+      color: active ? C.accentText : C.textMuted,
+      cursor: 'pointer', fontSize: '12px', fontWeight: active ? 700 : 400,
+    },
+    { hover: active ? null : { borderColor: C.textMuted, color: C.textSecondary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function PartidoToggle({ active, isNone, onClick, children }) {
+  const color = isNone ? C.textSecondary : C.yellow
+  const { style, handlers } = useInteractiveStyle(
+    {
+      flex: 1, padding: '8px 4px', borderRadius: '8px',
+      border: `1px solid ${active ? (isNone ? C.border : C.yellow) : C.border}`,
+      background: active ? (isNone ? C.surfaceHigh : C.yellow + '18') : 'transparent',
+      color: active ? color : C.textMuted,
+      cursor: 'pointer', fontSize: '11px', fontWeight: active ? 700 : 400,
+    },
+    { hover: active ? null : { borderColor: C.textMuted, color: C.textSecondary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function GuardarButton({ onClick, disabled, saving, saved }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      width: '100%', padding: '13px', background: saved ? '#059669' : C.accent,
+      color: 'white', border: 'none', borderRadius: '10px',
+      cursor: saving ? 'wait' : 'pointer', fontWeight: 700, fontSize: '15px',
+      opacity: saving ? 0.7 : 1, marginTop: '8px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+    },
+    { hover: saving ? null : { filter: 'brightness(1.08)' }, focus: focusRing }
+  )
+  return (
+    <button onClick={onClick} disabled={disabled} style={style} {...handlers}>
+      {saved && <IconCheck size={15} color="white" />}
+      {saving ? 'Guardando…' : saved ? 'Guardado' : 'Guardar perfil'}
+    </button>
+  )
+}
+
 const labelStyle = { fontSize: '12px', color: '#94A3B8', display: 'block' }

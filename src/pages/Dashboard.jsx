@@ -3,22 +3,15 @@ import { supabase } from '../supabase'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import ExcelJS from 'exceljs'
 import { Link } from 'react-router-dom'
+import { C, ESTADO_COLORS } from '../theme'
+import { IconSunrise, IconSun, IconApple, IconMoon, IconGym, IconPlan, IconWarning, IconDownload, IconMeal } from '../components/icons'
+import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
 
 const SLOTS = ['desayuno', 'almuerzo', 'merienda', 'cena']
 const ESTADOS = ['cumplida', 'con_cambios', 'no_cumplida', 'omitida']
 const ESTADO_LABELS = { cumplida: 'Cumplida', con_cambios: 'Con cambios', no_cumplida: 'No cumplida', omitida: 'Omitida' }
-const ESTADO_COLORS = { cumplida: '#10B981', con_cambios: '#F59E0B', no_cumplida: '#EF4444', omitida: '#6B7280' }
 const EXCEPCIONES = ['Partido de futsal', 'Cumpleaños / evento social', 'Trabajo / horario extendido', 'Falta de stock o vianda', 'Cansancio', 'Otro']
-
-const C = {
-  bg: '#0F1117', surface: '#1A1D27', surfaceHigh: '#22263A',
-  border: '#2A2D3E', accent: '#10B981', accentDim: '#10B98118',
-  accentText: '#34D399', blue: '#3B82F6', blueDim: '#3B82F618',
-  red: '#EF4444', redDim: '#EF444418', yellow: '#F59E0B', yellowDim: '#F59E0B18',
-  textPrimary: '#F1F5F9', textSecondary: '#94A3B8', textMuted: '#4B5563',
-}
-
-const SLOT_ICONS = { desayuno: '🌅', almuerzo: '☀️', merienda: '🍎', cena: '🌙' }
+const SLOT_ICON_CMP = { desayuno: IconSunrise, almuerzo: IconSun, merienda: IconApple, cena: IconMoon }
 
 function getLunes(date) {
   const d = new Date(date)
@@ -33,13 +26,93 @@ function formatSemana(lunesDate) {
   return `${lunesDate.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })} — ${domingo.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}`
 }
 
-// Tooltip personalizado para gráficos dark
 function DarkTooltip({ active, payload, label, suffix = '' }) {
   if (!active || !payload?.length) return null
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 12px' }}>
       <div style={{ color: C.textSecondary, fontSize: '12px', marginBottom: '4px' }}>{label}</div>
       <div style={{ color: C.accentText, fontWeight: 700, fontSize: '15px' }}>{payload[0].value}{suffix}</div>
+    </div>
+  )
+}
+
+// Tab de la barra principal — con estados hover/focus reales (la app es 100% inline).
+function TabButton({ active, onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      padding: '8px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+      background: active ? C.accent : C.surface,
+      color: active ? '#fff' : C.textSecondary,
+      fontWeight: active ? 700 : 400, fontSize: '14px',
+    },
+    { hover: active ? null : { background: C.surfaceHigh, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+function SubTabButton({ active, onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      padding: '6px 14px', borderRadius: '20px', border: `1px solid ${active ? C.accent : C.border}`,
+      cursor: 'pointer', fontSize: '13px',
+      background: active ? C.accentDim : 'transparent',
+      color: active ? C.accentText : C.textSecondary,
+    },
+    { hover: active ? null : { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+// Fila de lista — reemplaza el "card para todo": sin borde ni radius, hairline divider.
+function MealRow({ comida, log, onClick }) {
+  const estado = log?.status
+  const color = estado ? ESTADO_COLORS[estado] : null
+  const Icon = SLOT_ICON_CMP[comida.slot] || IconMeal
+  const { style, handlers } = useInteractiveStyle(
+    { display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 4px', borderBottom: `1px solid ${C.border}`, cursor: 'pointer' },
+    { hover: { background: C.surfaceHigh }, focus: focusRing }
+  )
+  return (
+    <div onClick={onClick} style={style} tabIndex={0} role="button" {...handlers}>
+      <div style={{
+        width: '34px', height: '34px', borderRadius: '9px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: color ? color + '18' : C.surfaceHigh,
+        border: `1px solid ${color ? color + '40' : C.border}`,
+      }}>
+        <Icon size={16} color={color || C.textMuted} />
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+          <span style={{ fontSize: '11px', color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{comida.slot}</span>
+          {comida.is_vianda && <span style={{ fontSize: '10px', background: C.accentDim, color: C.accentText, padding: '1px 6px', borderRadius: '10px' }}>vianda</span>}
+        </div>
+        <div style={{ fontWeight: 600, fontSize: '14px', color: C.textPrimary }}>{comida.description}</div>
+        {comida.meal_goal && <div style={{ fontSize: '12px', color: C.textMuted, marginTop: '2px' }}>{comida.meal_goal}</div>}
+        {log?.actual_meal && <div style={{ fontSize: '12px', color: C.textSecondary, marginTop: '4px' }}>→ {log.actual_meal}</div>}
+        {log?.exception_type && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: C.yellow, marginTop: '2px' }}>
+            <IconWarning size={11} color={C.yellow} />{log.exception_type}
+          </div>
+        )}
+      </div>
+      <div style={{
+        fontSize: '11px', fontWeight: 600, color: estado ? color : C.textMuted,
+        whiteSpace: 'nowrap', flexShrink: 0, marginTop: '2px',
+      }}>
+        {estado ? ESTADO_LABELS[estado] : 'Sin registrar'}
+      </div>
+    </div>
+  )
+}
+
+// Stat tipográfico — número grande + label + regla, sin card wrapper.
+function Stat({ value, label, sub, color, align = 'left' }) {
+  return (
+    <div style={{ textAlign: align, borderTop: `2px solid ${color || C.border}`, paddingTop: '10px' }}>
+      <div style={{ fontSize: '40px', fontWeight: 800, lineHeight: 1, color: color || C.textPrimary, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontSize: '13px', color: C.textSecondary, marginTop: '6px' }}>{label}</div>
+      {sub && <div style={{ fontSize: '12px', color: C.textMuted, marginTop: '2px' }}>{sub}</div>}
     </div>
   )
 }
@@ -63,11 +136,10 @@ export default function Dashboard({ session }) {
   const [evolucionCargas, setEvolucionCargas] = useState([])
   const [sesionGymHoy, setSesionGymHoy] = useState(null)
 
- const hoyDate = new Date()
-const hoy = hoyDate.toLocaleDateString('sv-SE')
-const diaSemana = hoyDate.getDay() === 0 ? 6 : hoyDate.getDay() - 1
-const lunes = getLunes(hoyDate)
-
+  const hoyDate = new Date()
+  const hoy = hoyDate.toLocaleDateString('sv-SE')
+  const diaSemana = hoyDate.getDay() === 0 ? 6 : hoyDate.getDay() - 1
+  const lunes = getLunes(hoyDate)
 
   useEffect(() => { cargarHoy() }, [])
   useEffect(() => { if (vista === 'reportes') cargarReportes() }, [vista, semanaReporte, reporteVista])
@@ -231,39 +303,17 @@ const lunes = getLunes(hoyDate)
     background: C.surface, color: C.textPrimary, fontSize: '14px', outline: 'none',
   }
 
-  const tabBtn = (key, label) => (
-    <button key={key} onClick={() => setVista(key)} style={{
-      padding: '8px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-      background: vista === key ? C.accent : C.surface,
-      color: vista === key ? '#fff' : C.textSecondary,
-      fontWeight: vista === key ? 700 : 400, fontSize: '14px',
-      transition: 'all 0.15s',
-    }}>{label}</button>
-  )
-
-  const subTabBtn = (key, label) => (
-    <button key={key} onClick={() => setReporteVista(key)} style={{
-      padding: '6px 14px', borderRadius: '20px', border: `1px solid ${reporteVista === key ? C.accent : C.border}`,
-      cursor: 'pointer', fontSize: '13px',
-      background: reporteVista === key ? C.accentDim : 'transparent',
-      color: reporteVista === key ? C.accentText : C.textSecondary,
-      transition: 'all 0.15s',
-    }}>{label}</button>
-  )
-
   return (
     <div style={{ color: C.textPrimary }}>
-      {/* Tabs principales */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem' }}>
-        {tabBtn('hoy', 'Hoy')}
-        {tabBtn('reportes', 'Reportes')}
+        <TabButton active={vista === 'hoy'} onClick={() => setVista('hoy')}>Hoy</TabButton>
+        <TabButton active={vista === 'reportes'} onClick={() => setVista('reportes')}>Reportes</TabButton>
       </div>
 
       {/* ══ VISTA HOY ══ */}
       {vista === 'hoy' && (
         <div>
-          {/* Header con fecha y adherencia */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
             <div>
               <div style={{ fontSize: '13px', color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2px' }}>
                 {hoyDate.toLocaleDateString('es-AR', { weekday: 'long' })}
@@ -274,25 +324,25 @@ const lunes = getLunes(hoyDate)
             </div>
             {total > 0 && (
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '32px', fontWeight: 800, color: adherenciaColor, lineHeight: 1 }}>{adherencia}%</div>
+                <div style={{ fontSize: '32px', fontWeight: 800, color: adherenciaColor, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{adherencia}%</div>
                 <div style={{ fontSize: '12px', color: C.textMuted, marginTop: '2px' }}>{cumplidas}/{total} comidas</div>
               </div>
             )}
           </div>
 
-          {/* Card gym hoy */}
+          {/* Card gym hoy — sigue siendo card: es una entidad accionable */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: '12px',
-            padding: '12px 16px', borderRadius: '12px', marginBottom: '1rem',
+            padding: '12px 16px', borderRadius: '10px', marginBottom: '1.25rem',
             background: sesionGymHoy ? C.accentDim : C.surface,
-            border: `1px solid ${sesionGymHoy ? C.accent : C.border}`,
+            border: `1px solid ${sesionGymHoy ? C.accent + '50' : C.border}`,
           }}>
-            <span style={{ fontSize: '20px' }}>🏋️</span>
+            <IconGym size={20} color={sesionGymHoy ? C.accent : C.textMuted} />
             {sesionGymHoy ? (
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: '14px', color: C.textPrimary }}>{sesionGymHoy.routine_type || 'Entrenamiento'}</div>
                 <div style={{ fontSize: '12px', color: sesionGymHoy.completed ? C.accentText : C.yellow, marginTop: '2px' }}>
-                  {sesionGymHoy.completed ? '✓ Completado' : '⏳ En progreso'}
+                  {sesionGymHoy.completed ? 'Completado' : 'En progreso'}
                 </div>
               </div>
             ) : (
@@ -300,54 +350,20 @@ const lunes = getLunes(hoyDate)
             )}
           </div>
 
-          {/* Comidas */}
           {loading ? (
-            <div style={{ color: C.textMuted, padding: '2rem', textAlign: 'center' }}>Cargando...</div>
+            <div style={{ color: C.textMuted, padding: '2rem', textAlign: 'center' }}>Cargando…</div>
           ) : comidas.length === 0 ? (
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '1.5rem', textAlign: 'center' }}>
-              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📋</div>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '1.5rem', textAlign: 'center' }}>
               <div style={{ color: C.textSecondary, fontSize: '14px' }}>
                 No hay comidas planificadas para hoy.{' '}
                 <Link to="/plan" style={{ color: C.accentText }}>Ir al plan semanal</Link>
               </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {comidas.map(comida => {
-                const log = logs[comida.id]
-                const estado = log?.status
-                const color = estado ? ESTADO_COLORS[estado] : C.border
-                return (
-                  <div key={comida.id} onClick={() => abrirModal(comida)} style={{
-                    border: `1px solid ${estado ? color + '60' : C.border}`,
-                    borderLeft: `3px solid ${color}`,
-                    borderRadius: '12px', padding: '14px 16px', cursor: 'pointer',
-                    background: estado ? color + '10' : C.surface,
-                    transition: 'background 0.15s',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                          <span style={{ fontSize: '14px' }}>{SLOT_ICONS[comida.slot] || '🍽️'}</span>
-                          <span style={{ fontSize: '11px', color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{comida.slot}</span>
-                          {comida.is_vianda && <span style={{ fontSize: '10px', background: C.accentDim, color: C.accentText, padding: '1px 6px', borderRadius: '10px' }}>vianda</span>}
-                        </div>
-                        <div style={{ fontWeight: 600, fontSize: '14px', color: C.textPrimary }}>{comida.description}</div>
-                        {comida.meal_goal && <div style={{ fontSize: '12px', color: C.textMuted, marginTop: '2px' }}>{comida.meal_goal}</div>}
-                        {log?.actual_meal && <div style={{ fontSize: '12px', color: C.textSecondary, marginTop: '4px' }}>→ {log.actual_meal}</div>}
-                        {log?.exception_type && <div style={{ fontSize: '11px', color: C.yellow, marginTop: '2px' }}>⚡ {log.exception_type}</div>}
-                      </div>
-                      <div style={{
-                        fontSize: '11px', fontWeight: 600, color: estado ? color : C.textMuted,
-                        background: estado ? color + '15' : C.surfaceHigh,
-                        padding: '4px 10px', borderRadius: '20px', whiteSpace: 'nowrap', flexShrink: 0,
-                      }}>
-                        {estado ? ESTADO_LABELS[estado] : 'Sin registrar'}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+            <div>
+              {comidas.map(comida => (
+                <MealRow key={comida.id} comida={comida} log={logs[comida.id]} onClick={() => abrirModal(comida)} />
+              ))}
             </div>
           )}
         </div>
@@ -358,60 +374,56 @@ const lunes = getLunes(hoyDate)
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ fontSize: '18px', fontWeight: 700 }}>Reportes</div>
-            <button onClick={exportarExcel} style={{
-              background: C.accentDim, color: C.accentText,
-              border: `1px solid ${C.accent}`, padding: '6px 14px',
-              borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-            }}>⬇ Exportar Excel</button>
+            <ExportButton onClick={exportarExcel} />
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-            {[['adherencia', 'Adherencia'], ['viandas', 'Viandas'], ['cargas', 'Cargas']].map(([k, l]) => subTabBtn(k, l))}
+            {[['adherencia', 'Adherencia'], ['viandas', 'Viandas'], ['cargas', 'Cargas']].map(([k, l]) => (
+              <SubTabButton key={k} active={reporteVista === k} onClick={() => setReporteVista(k)}>{l}</SubTabButton>
+            ))}
           </div>
 
           {(reporteVista === 'adherencia' || reporteVista === 'viandas') && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
-              <button onClick={() => { const d = new Date(semanaReporte); d.setDate(d.getDate() - 7); setSemanaReporte(d) }}
-                style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', cursor: 'pointer', background: C.surface, color: C.textSecondary }}>←</button>
-              <span style={{ fontWeight: 500, fontSize: '13px', color: C.textSecondary }}>{formatSemana(semanaReporte)}</span>
-              <button onClick={() => { const d = new Date(semanaReporte); d.setDate(d.getDate() + 7); setSemanaReporte(d) }}
-                style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', cursor: 'pointer', background: C.surface, color: C.textSecondary }}>→</button>
-            </div>
+            <WeekNav
+              label={formatSemana(semanaReporte)}
+              onPrev={() => { const d = new Date(semanaReporte); d.setDate(d.getDate() - 7); setSemanaReporte(d) }}
+              onNext={() => { const d = new Date(semanaReporte); d.setDate(d.getDate() + 7); setSemanaReporte(d) }}
+            />
           )}
 
           {loadingReporte ? (
-            <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>Cargando...</div>
+            <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>Cargando…</div>
           ) : (
             <>
-              {/* Adherencia */}
               {reporteVista === 'adherencia' && (
                 !adherenciaSemanal ? (
                   <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>No hay datos para esta semana.</div>
                 ) : (
                   <div>
-                    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '1.25rem', textAlign: 'center', marginBottom: '1.25rem' }}>
-                      <div style={{ fontSize: '48px', fontWeight: 800, color: adherenciaSemanal.pct >= 75 ? C.accent : adherenciaSemanal.pct >= 50 ? C.yellow : C.red, lineHeight: 1 }}>
-                        {adherenciaSemanal.pct}%
-                      </div>
-                      <div style={{ fontSize: '13px', color: C.textSecondary, marginTop: '6px' }}>Adherencia semanal</div>
-                      <div style={{ fontSize: '12px', color: C.textMuted, marginTop: '2px' }}>{adherenciaSemanal.totalCumplidas}/{adherenciaSemanal.totalComidas} comidas</div>
+                    <Stat
+                      value={`${adherenciaSemanal.pct}%`}
+                      label="Adherencia semanal"
+                      sub={`${adherenciaSemanal.totalCumplidas}/${adherenciaSemanal.totalComidas} comidas`}
+                      color={adherenciaSemanal.pct >= 75 ? C.accent : adherenciaSemanal.pct >= 50 ? C.yellow : C.red}
+                    />
+                    <div style={{ marginTop: '1.25rem' }}>
+                      <ResponsiveContainer width="100%" height={180}>
+                        <BarChart data={adherenciaSemanal.porDia} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
+                          <XAxis dataKey="dia" tick={{ fontSize: 11, fill: C.textMuted }} axisLine={false} tickLine={false} />
+                          <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: C.textMuted }} axisLine={false} tickLine={false} />
+                          <Tooltip content={<DarkTooltip suffix="%" />} />
+                          <Bar dataKey="pct" fill={C.accent} radius={[4, 4, 0, 0]} name="Adherencia" />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={adherenciaSemanal.porDia} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
-                        <XAxis dataKey="dia" tick={{ fontSize: 11, fill: C.textMuted }} axisLine={false} tickLine={false} />
-                        <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: C.textMuted }} axisLine={false} tickLine={false} />
-                        <Tooltip content={<DarkTooltip suffix="%" />} />
-                        <Bar dataKey="pct" fill={C.accent} radius={[6, 6, 0, 0]} name="Adherencia" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '1rem' }}>
+                    <div style={{ marginTop: '0.5rem' }}>
                       {adherenciaSemanal.porDia.map(d => (
-                        <div key={d.dia} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: C.surface, borderRadius: '8px', border: `1px solid ${C.border}` }}>
+                        <div key={d.dia} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 4px', borderBottom: `1px solid ${C.border}` }}>
                           <span style={{ fontSize: '14px', fontWeight: 500, color: C.textPrimary }}>{d.dia}</span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <span style={{ fontSize: '12px', color: C.textMuted }}>{d.cumplidas}/{d.total}</span>
-                            <span style={{ fontWeight: 700, fontSize: '14px', color: d.pct >= 75 ? C.accent : d.pct >= 50 ? C.yellow : d.total === 0 ? C.textMuted : C.red, minWidth: '40px', textAlign: 'right' }}>
+                            <span style={{ fontWeight: 700, fontSize: '14px', color: d.pct >= 75 ? C.accent : d.pct >= 50 ? C.yellow : d.total === 0 ? C.textMuted : C.red, minWidth: '40px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                               {d.total === 0 ? '—' : `${d.pct}%`}
                             </span>
                           </div>
@@ -422,38 +434,33 @@ const lunes = getLunes(hoyDate)
                 )
               )}
 
-              {/* Viandas */}
               {reporteVista === 'viandas' && (
                 viandasResumen.length === 0 ? (
                   <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>No hay viandas asignadas esta semana.</div>
                 ) : (
                   <div>
-                    <div style={{ background: C.accentDim, border: `1px solid ${C.accent}`, borderRadius: '10px', padding: '12px 16px', marginBottom: '1rem' }}>
-                      <span style={{ fontWeight: 700, color: C.accentText }}>{viandasResumen.length}</span>
-                      <span style={{ color: C.textSecondary, fontSize: '13px' }}> viandas asignadas esta semana</span>
+                    <div style={{ fontSize: '13px', color: C.textSecondary, marginBottom: '0.75rem' }}>
+                      <span style={{ fontWeight: 700, color: C.accentText, fontVariantNumeric: 'tabular-nums' }}>{viandasResumen.length}</span> viandas asignadas esta semana
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {viandasResumen.map((v, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: '10px', background: C.surface }}>
-                          <div style={{ textAlign: 'center', minWidth: '48px' }}>
-                            <div style={{ fontWeight: 700, fontSize: '13px', color: C.accentText }}>{v.dia.slice(0, 3)}</div>
-                            <div style={{ fontSize: '10px', color: C.textMuted, textTransform: 'capitalize' }}>{v.slot}</div>
-                          </div>
-                          <div style={{ fontSize: '13px', color: C.textSecondary }}>{v.descripcion}</div>
+                    {viandasResumen.map((v, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '10px 4px', borderBottom: `1px solid ${C.border}` }}>
+                        <div style={{ textAlign: 'center', minWidth: '48px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '13px', color: C.accentText }}>{v.dia.slice(0, 3)}</div>
+                          <div style={{ fontSize: '10px', color: C.textMuted, textTransform: 'capitalize' }}>{v.slot}</div>
                         </div>
-                      ))}
-                    </div>
+                        <div style={{ fontSize: '13px', color: C.textSecondary }}>{v.descripcion}</div>
+                      </div>
+                    ))}
                   </div>
                 )
               )}
 
-              {/* Cargas */}
               {reporteVista === 'cargas' && (
                 ejerciciosDisponibles.length === 0 ? (
                   <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>No hay ejercicios registrados todavía.</div>
                 ) : (
                   <div>
-                    <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ marginBottom: '1.25rem' }}>
                       <label style={{ fontSize: '12px', color: C.textMuted, display: 'block', marginBottom: '6px' }}>Ejercicio</label>
                       <select value={ejercicioSeleccionado} onChange={e => setEjercicioSeleccionado(e.target.value)}
                         style={{ padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', fontSize: '14px', width: '100%', maxWidth: '320px', background: C.surface, color: C.textPrimary }}>
@@ -464,26 +471,25 @@ const lunes = getLunes(hoyDate)
                       <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>No hay registros de peso para este ejercicio.</div>
                     ) : (
                       <>
-                        <div style={{ background: C.accentDim, border: `1px solid ${C.accent}`, borderRadius: '10px', padding: '12px 16px', marginBottom: '1rem', display: 'inline-block' }}>
-                          <div style={{ fontSize: '11px', color: C.textMuted }}>Máximo registrado</div>
-                          <div style={{ fontWeight: 800, fontSize: '22px', color: C.accentText }}>{Math.max(...evolucionCargas.map(e => e.kg))} kg</div>
+                        <Stat value={`${Math.max(...evolucionCargas.map(e => e.kg))} kg`} label="Máximo registrado" color={C.accentText} />
+                        <div style={{ marginTop: '1.25rem' }}>
+                          <ResponsiveContainer width="100%" height={200}>
+                            <LineChart data={evolucionCargas} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
+                              <XAxis dataKey="fecha" tick={{ fontSize: 11, fill: C.textMuted }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 11, fill: C.textMuted }} axisLine={false} tickLine={false} />
+                              <Tooltip content={<DarkTooltip suffix=" kg" />} />
+                              <Line type="monotone" dataKey="kg" stroke={C.accent} strokeWidth={2.5} dot={{ r: 4, fill: C.accent, strokeWidth: 0 }} name="Peso (kg)" />
+                            </LineChart>
+                          </ResponsiveContainer>
                         </div>
-                        <ResponsiveContainer width="100%" height={200}>
-                          <LineChart data={evolucionCargas} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.border} />
-                            <XAxis dataKey="fecha" tick={{ fontSize: 11, fill: C.textMuted }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: C.textMuted }} axisLine={false} tickLine={false} />
-                            <Tooltip content={<DarkTooltip suffix=" kg" />} />
-                            <Line type="monotone" dataKey="kg" stroke={C.accent} strokeWidth={2.5} dot={{ r: 4, fill: C.accent, strokeWidth: 0 }} name="Peso (kg)" />
-                          </LineChart>
-                        </ResponsiveContainer>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '1rem' }}>
+                        <div style={{ marginTop: '0.5rem' }}>
                           {[...evolucionCargas].reverse().map((e, i) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: C.surface, borderRadius: '8px', border: `1px solid ${C.border}`, fontSize: '13px' }}>
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 4px', borderBottom: `1px solid ${C.border}`, fontSize: '13px' }}>
                               <span style={{ color: C.textMuted }}>{e.fecha}</span>
                               <div style={{ display: 'flex', gap: '16px' }}>
                                 {e.series > 0 && <span style={{ color: C.textSecondary }}>{e.series}×{e.reps}</span>}
-                                <span style={{ fontWeight: 700, color: C.accentText }}>{e.kg} kg</span>
+                                <span style={{ fontWeight: 700, color: C.accentText, fontVariantNumeric: 'tabular-nums' }}>{e.kg} kg</span>
                               </div>
                             </div>
                           ))}
@@ -528,23 +534,54 @@ const lunes = getLunes(hoyDate)
             <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} style={{ ...inp, height: '70px', resize: 'vertical' }} />
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-              <button onClick={guardarLog} disabled={saving || !form.status} style={{
-                flex: 1, background: C.accent, color: 'white', border: 'none',
-                padding: '13px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '15px',
-                opacity: saving || !form.status ? 0.5 : 1,
-              }}>
-                {saving ? 'Guardando...' : 'Guardar'}
-              </button>
-              <button onClick={() => setModal(null)} style={{
-                padding: '13px 20px', border: `1px solid ${C.border}`, borderRadius: '10px',
-                cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px',
-              }}>
-                Cancelar
-              </button>
+              <ModalPrimaryButton onClick={guardarLog} disabled={saving || !form.status}>
+                {saving ? 'Guardando…' : 'Guardar'}
+              </ModalPrimaryButton>
+              <ModalSecondaryButton onClick={() => setModal(null)}>Cancelar</ModalSecondaryButton>
             </div>
           </div>
         </div>
       )}
     </div>
   )
+}
+
+function WeekNav({ label, onPrev, onNext }) {
+  const btn = (onClick, children) => {
+    const { style, handlers } = useInteractiveStyle(
+      { padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', cursor: 'pointer', background: C.surface, color: C.textSecondary },
+      { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
+    )
+    return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
+      {btn(onPrev, '←')}
+      <span style={{ fontWeight: 500, fontSize: '13px', color: C.textSecondary }}>{label}</span>
+      {btn(onNext, '→')}
+    </div>
+  )
+}
+
+function ExportButton({ onClick }) {
+  const { style, handlers } = useInteractiveStyle(
+    { display: 'flex', alignItems: 'center', gap: '6px', background: C.accentDim, color: C.accentText, border: `1px solid ${C.accent}`, padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 },
+    { hover: { background: C.accent, color: '#fff' }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}><IconDownload size={14} />Exportar Excel</button>
+}
+
+function ModalPrimaryButton({ onClick, disabled, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { flex: 1, background: C.accent, color: 'white', border: 'none', padding: '13px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '15px', opacity: disabled ? 0.5 : 1 },
+    { hover: disabled ? null : { filter: 'brightness(1.08)' }, focus: focusRing }
+  )
+  return <button onClick={onClick} disabled={disabled} style={style} {...handlers}>{children}</button>
+}
+function ModalSecondaryButton({ onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { padding: '13px 20px', border: `1px solid ${C.border}`, borderRadius: '10px', cursor: 'pointer', background: 'transparent', color: C.textSecondary, fontSize: '15px' },
+    { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
 }
