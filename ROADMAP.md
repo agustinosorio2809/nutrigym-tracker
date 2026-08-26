@@ -1,20 +1,23 @@
-# ROADMAP — Series, 1RM estimado y detección de PR
+# ROADMAP — Motor de progresión automática
 
 > **Para quien ejecute esto:** los bullets usan checkbox (`- [ ]`) para ir marcando avance.
 > Ningún bullet se marca completo sin correr su verificación. La suite entera (`npm test`)
 > corre antes de cada commit.
 
-**Objetivo:** migrar el registro de gimnasio a un modelo por serie y construir encima el
-cálculo de 1RM estimado y la detección de récords personales.
+**Objetivo:** que la app deje de sembrar siempre el mismo peso y sugiera qué hacer la
+próxima vez con cada ejercicio, a partir del RIR ya registrado; que detecte estancamiento
+y ofrezca un deload.
 
-**Arquitectura:** toda la aritmética vive en un servicio puro (`src/services/oneRepMax.js`)
-sin dependencias de Supabase ni React, testeado con Vitest. Las páginas hacen el I/O y le
-pasan datos ya cargados. La migración de base se parte en dos scripts SQL con verificación
-manual entre medio, porque no hay ambiente de desarrollo separado.
+**Arquitectura:** un servicio puro nuevo (`src/services/progresion.js`) sin dependencias de
+Supabase ni React, testeado con Vitest, que importa de `oneRepMax.js`. `Gimnasio.jsx` hace
+el I/O y le pasa datos ya cargados. **Sin cambios de base de datos:** una sola query — la
+que ya alimenta el PR — alimenta también sugerencia y estancamiento.
 
 **Stack:** React 19, Vite 8, Supabase (PostgreSQL + RLS), Vitest.
 
-**Spec:** `docs/superpowers/specs/2026-08-25-gym-series-1rm-pr-design.md`
+**Spec:** `docs/superpowers/specs/2026-08-26-gym-motor-progresion-design.md`
+
+**Roadmap anterior (completo):** `docs/superpowers/roadmaps/2026-08-25-gym-series-1rm-pr-roadmap.md`
 
 ---
 
@@ -22,297 +25,290 @@ manual entre medio, porque no hay ambiente de desarrollo separado.
 
 - **Estilos 100% inline.** Sin Tailwind, sin CSS modules, sin styled-components. Todo en
   `style={{}}`, usando los tokens de `src/theme.js`.
-- **Sin dependencias de UI nuevas.** El proyecto tiene cero componentes externos.
-- **Íconos** desde `src/components/icons.jsx` (SVG, `viewBox` 24×24, `strokeWidth` 2).
-  Nunca emoji como ícono funcional.
+- **Sin dependencias nuevas.** Ni de UI ni de otro tipo: este roadmap no instala nada.
+- **Íconos** desde `src/components/icons.jsx` (SVG, `viewBox` 24×24, `strokeWidth` 2,
+  round caps). Nunca emoji como ícono funcional.
 - **Hover / focus / active** vía `useInteractiveStyle` de `src/hooks/useInteractiveStyle.js`.
 - **Breakpoint mobile:** `window.innerWidth < 640`.
-- **RLS activo en todas las tablas.** Nunca desactivarlo.
-- **`auth.uid()` devuelve `null` en el editor SQL de Supabase** (corre como `service_role`).
-  No usarlo en scripts manuales.
-- **Commits convencionales** vía CLI (`feat:`, `fix:`, `test:`, `refactor:`).
-- Correr `npm run lint` antes de cada commit.
+- **No se toca la base de datos.** Ninguna tarea de este roadmap escribe SQL.
+- **Commits convencionales** vía CLI (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`).
+- Correr `npm run lint && npm test` antes de cada commit.
 
 ---
 
-## Orden y estado de la base
+## Estructura de archivos
 
-Las tareas 1-3 son solo lógica pura: no tocan la base ni la UI, y se pueden hacer sin
-riesgo. La tarea 4 crea la tabla. Entre la tarea 4 y la 10 conviven los dos esquemas: las
-columnas viejas de `gym_exercises` quedan congeladas y dejan de leerse, pero no se borran.
-El backfill está escrito para ser **idempotente** (solo inserta para ejercicios que todavía
-no tienen series), así que se vuelve a correr en la tarea 10 para levantar cualquier sesión
-cargada en el medio.
+| Archivo | Responsabilidad | Tarea |
+|---|---|---|
+| `src/services/progresion.js` | **Crear.** Reglas de entrenamiento: sugerencia, estancamiento, deload. Puro. | 1-4 |
+| `src/services/progresion.test.js` | **Crear.** Tests de la lógica pura. | 1-4 |
+| `src/components/gym.jsx` | **Crear.** Componentes de presentación de Gimnasio (los nueve existentes + los chips nuevos). | 5-7 |
+| `src/components/icons.jsx` | **Modificar.** Dos íconos nuevos (`IconTrendingUp`, `IconTrendingDown`). | 6 |
+| `src/pages/Gimnasio.jsx` | **Modificar.** I/O y lógica de página; deja de alojar componentes de presentación. | 5-8 |
+| `CLAUDE.md`, `README.md`, `DECISIONS.md` | **Modificar.** Documentación y decisiones. | 9 |
+
+`progresion.js` importa de `oneRepMax.js` (`mejorSerie`, `pesoMaximo`), nunca al revés.
 
 ---
 
-## Tarea 1 — Vitest + `estimar1RM`
+## Orden
+
+Las tareas 1-4 son lógica pura: no tocan la UI ni la base, y se pueden hacer sin riesgo.
+La tarea 5 es un refactor mecánico que prepara el terreno. Las 6-8 son la UI. La 9 cierra.
+
+---
+
+## Tarea 1 — `sesionesDeEjercicio`
 
 **Archivos:**
-- Modificar: `package.json`
-- Crear: `src/services/oneRepMax.js`
-- Crear: `src/services/oneRepMax.test.js`
+- Crear: `src/services/progresion.js`
+- Crear: `src/services/progresion.test.js`
 
-**Produce:** `estimar1RM({ weight_kg, reps }) → number | null` y la constante
-`MAX_REPS_ESTIMABLE = 15`.
+**Interfaces:**
+- Consume: `mejorSerie(series) → { serie, unaRM } | null` de `src/services/oneRepMax.js`.
+- Produce: `sesionesDeEjercicio(filas) → [{ date, series, mejor }]`, ordenado por fecha
+  descendente (la más reciente primero). `series` es el array plano de `gym_sets` de esa
+  fecha; `mejor` es lo que devuelve `mejorSerie` sobre ese array (puede ser `null`).
 
-- [ ] **Paso 1: instalar Vitest**
+`filas` son filas de `gym_exercises` tal como las devuelve Supabase, ya filtradas al mismo
+ejercicio, con la forma:
 
-```bash
-npm i -D vitest
+```js
+{ exercise_name: 'Press banca', gym_sets: [{ weight_kg, reps, rir }], gym_logs: { date } }
 ```
 
-- [ ] **Paso 2: agregar el script de test**
+- [ ] **Paso 1: escribir el test que falla**
 
-En `package.json`, dentro de `"scripts"`, agregar:
-
-```json
-"test": "vitest run",
-"test:watch": "vitest"
-```
-
-- [ ] **Paso 3: escribir el test que falla**
-
-Crear `src/services/oneRepMax.test.js`:
+Crear `src/services/progresion.test.js`:
 
 ```js
 import { describe, it, expect } from 'vitest'
-import { estimar1RM, MAX_REPS_ESTIMABLE } from './oneRepMax'
+import { sesionesDeEjercicio } from './progresion'
 
-describe('estimar1RM', () => {
-  it('con 1 repetición devuelve el peso exacto', () => {
-    expect(estimar1RM({ weight_kg: 100, reps: 1 })).toBe(100)
-  })
-
-  it('aplica la fórmula de Epley', () => {
-    // 80 × (1 + 8/30) = 101.333…
-    expect(estimar1RM({ weight_kg: 80, reps: 8 })).toBeCloseTo(101.33, 2)
-  })
-
-  it('acepta el tope de 15 repeticiones', () => {
-    expect(estimar1RM({ weight_kg: 100, reps: MAX_REPS_ESTIMABLE })).toBeCloseTo(150, 2)
-  })
-
-  it('devuelve null por encima del tope', () => {
-    expect(estimar1RM({ weight_kg: 100, reps: 16 })).toBeNull()
-  })
-
-  it('devuelve null sin peso (futsal, cardio, peso corporal)', () => {
-    expect(estimar1RM({ weight_kg: null, reps: 10 })).toBeNull()
-  })
-
-  it('devuelve null con peso 0', () => {
-    expect(estimar1RM({ weight_kg: 0, reps: 10 })).toBeNull()
-  })
-
-  it('devuelve null sin repeticiones', () => {
-    expect(estimar1RM({ weight_kg: 80, reps: null })).toBeNull()
-  })
-})
-```
-
-- [ ] **Paso 4: correr el test y verificar que falla**
-
-```bash
-npm test
-```
-
-Esperado: FAIL — `estimar1RM is not a function` (el módulo todavía no existe).
-
-- [ ] **Paso 5: implementar el mínimo**
-
-Crear `src/services/oneRepMax.js`:
-
-```js
-// src/services/oneRepMax.js
-// Cálculo de 1RM estimado y detección de récords personales.
-// Funciones puras: sin Supabase, sin React. Ver spec en
-// docs/superpowers/specs/2026-08-25-gym-series-1rm-pr-design.md
-
-// Por encima de ~12 reps la fórmula de Epley sobreestima. El corte va en 15:
-// más abajo dejaría sesiones enteras sin 1RM, que es peor que un número con
-// margen de error. Un 1RM derivado de 13-15 reps es orientativo.
-export const MAX_REPS_ESTIMABLE = 15
-
-// Epley: 1RM = peso × (1 + reps / 30)
-export function estimar1RM({ weight_kg, reps } = {}) {
-  const peso = Number(weight_kg)
-  const r = Number(reps)
-  if (!Number.isFinite(peso) || peso <= 0) return null
-  if (!Number.isFinite(r) || r < 1 || r > MAX_REPS_ESTIMABLE) return null
-  return peso * (1 + r / 30)
+// Helper: una fila de gym_exercises con la forma que devuelve Supabase.
+function fila(date, series) {
+  return { exercise_name: 'Press banca', gym_sets: series, gym_logs: { date } }
 }
-```
 
-- [ ] **Paso 6: correr el test y verificar que pasa**
-
-```bash
-npm test
-```
-
-Esperado: PASS, 7 tests.
-
-- [ ] **Paso 7: lint y commit**
-
-```bash
-npm run lint
-git add package.json package-lock.json src/services/oneRepMax.js src/services/oneRepMax.test.js
-git commit -m "test: vitest + calculo de 1RM estimado con formula Epley"
-```
-
----
-
-## Tarea 2 — `mejorSerie`
-
-**Archivos:**
-- Modificar: `src/services/oneRepMax.js`
-- Modificar: `src/services/oneRepMax.test.js`
-
-**Consume:** `estimar1RM` de la tarea 1.
-**Produce:** `mejorSerie(series) → { serie, unaRM } | null`.
-
-- [ ] **Paso 1: escribir el test que falla**
-
-Agregar al final de `src/services/oneRepMax.test.js` (y sumar `mejorSerie` al import
-de arriba):
-
-```js
-describe('mejorSerie', () => {
-  it('elige por 1RM estimado, no por peso crudo', () => {
-    const series = [
-      { weight_kg: 90, reps: 1 },   // 1RM = 90
-      { weight_kg: 80, reps: 8 },   // 1RM = 101.3 ← gana pese a pesar menos
-    ]
-    expect(mejorSerie(series).serie).toBe(series[1])
+describe('sesionesDeEjercicio', () => {
+  it('ordena de la más reciente a la más antigua', () => {
+    const r = sesionesDeEjercicio([
+      fila('2026-08-01', [{ weight_kg: 80, reps: 8, rir: 2 }]),
+      fila('2026-08-20', [{ weight_kg: 85, reps: 8, rir: 2 }]),
+      fila('2026-08-10', [{ weight_kg: 82.5, reps: 8, rir: 2 }]),
+    ])
+    expect(r.map(s => s.date)).toEqual(['2026-08-20', '2026-08-10', '2026-08-01'])
   })
 
-  it('devuelve null con lista vacía', () => {
-    expect(mejorSerie([])).toBeNull()
+  it('calcula la mejor serie de cada sesión', () => {
+    const r = sesionesDeEjercicio([fila('2026-08-01', [
+      { weight_kg: 90, reps: 1, rir: 0 },   // 1RM = 90
+      { weight_kg: 80, reps: 8, rir: 2 },   // 1RM = 101.3 ← gana
+    ])])
+    expect(r[0].mejor.unaRM).toBeCloseTo(101.33, 2)
   })
 
-  it('devuelve null si ninguna serie es estimable', () => {
-    expect(mejorSerie([{ weight_kg: null, reps: 10 }])).toBeNull()
+  it('junta en una sola sesión dos filas de la misma fecha', () => {
+    const r = sesionesDeEjercicio([
+      fila('2026-08-01', [{ weight_kg: 80, reps: 8, rir: 2 }]),
+      fila('2026-08-01', [{ weight_kg: 85, reps: 5, rir: 1 }]),
+    ])
+    expect(r).toHaveLength(1)
+    expect(r[0].series).toHaveLength(2)
   })
 
-  it('ignora las series no estimables y usa el resto', () => {
-    const series = [
-      { weight_kg: null, reps: 10 },
-      { weight_kg: 60, reps: 5 },
-    ]
-    expect(mejorSerie(series).serie).toBe(series[1])
+  it('ignora los ejercicios sin series', () => {
+    expect(sesionesDeEjercicio([fila('2026-08-01', [])])).toEqual([])
   })
 
-  it('ante un empate se queda con la primera', () => {
-    const series = [
-      { weight_kg: 80, reps: 5 },
-      { weight_kg: 80, reps: 5 },
-    ]
-    expect(mejorSerie(series).serie).toBe(series[0])
+  it('ignora las filas sin fecha', () => {
+    expect(sesionesDeEjercicio([{ gym_sets: [{ weight_kg: 80, reps: 8 }] }])).toEqual([])
   })
 
-  it('devuelve null si no recibe un array', () => {
-    expect(mejorSerie(undefined)).toBeNull()
+  it('devuelve lista vacía si no recibe un array', () => {
+    expect(sesionesDeEjercicio(undefined)).toEqual([])
+  })
+
+  it('deja mejor en null si ninguna serie es estimable', () => {
+    const r = sesionesDeEjercicio([fila('2026-08-01', [{ weight_kg: null, reps: 30, rir: 0 }])])
+    expect(r[0].mejor).toBeNull()
   })
 })
 ```
 
-- [ ] **Paso 2: correr y verificar que falla**
+- [ ] **Paso 2: correr el test y verificar que falla**
 
 ```bash
 npm test
 ```
 
-Esperado: FAIL — `mejorSerie is not a function`.
+Esperado: FAIL — no se puede resolver el módulo `./progresion`.
 
 - [ ] **Paso 3: implementar**
 
-Agregar a `src/services/oneRepMax.js`:
+Crear `src/services/progresion.js`:
 
 ```js
-// La serie de mayor 1RM estimado. Ante empate se queda con la primera.
-// Devuelve null si ninguna serie es estimable.
-export function mejorSerie(series) {
-  if (!Array.isArray(series)) return null
-  let mejor = null
-  for (const serie of series) {
-    const unaRM = estimar1RM(serie)
-    if (unaRM === null) continue
-    if (mejor === null || unaRM > mejor.unaRM) mejor = { serie, unaRM }
+// src/services/progresion.js
+// Motor de progresión: qué peso poner la próxima vez, cuándo un ejercicio se
+// estancó y cuándo conviene un deload. Funciones puras: sin Supabase, sin React.
+// Ver spec en docs/superpowers/specs/2026-08-26-gym-motor-progresion-design.md
+
+import { mejorSerie } from './oneRepMax'
+
+// Agrupa las filas de un mismo ejercicio por sesión (fecha) y calcula la mejor
+// serie de cada una. Devuelve de la más reciente a la más antigua.
+// Las fechas vienen como 'YYYY-MM-DD', así que el orden lexicográfico es el
+// orden cronológico.
+export function sesionesDeEjercicio(filas) {
+  if (!Array.isArray(filas)) return []
+  const porFecha = new Map()
+  for (const fila of filas) {
+    const date = fila?.gym_logs?.date
+    const series = fila?.gym_sets || []
+    if (!date || !series.length) continue
+    porFecha.set(date, [...(porFecha.get(date) || []), ...series])
   }
-  return mejor
+  return [...porFecha.entries()]
+    .map(([date, series]) => ({ date, series, mejor: mejorSerie(series) }))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
 }
 ```
 
-- [ ] **Paso 4: correr y verificar que pasa**
+- [ ] **Paso 4: correr el test y verificar que pasa**
 
 ```bash
 npm test
 ```
 
-Esperado: PASS, 13 tests.
+Esperado: PASS. 7 tests nuevos, más los 21 que ya existían de `oneRepMax`.
 
 - [ ] **Paso 5: lint y commit**
 
 ```bash
-npm run lint
-git add src/services/oneRepMax.js src/services/oneRepMax.test.js
-git commit -m "feat: seleccion de mejor serie por 1RM estimado"
+npm run lint && npm test
+git add src/services/progresion.js src/services/progresion.test.js
+git commit -m "feat: agrupacion del historico de un ejercicio por sesion"
 ```
 
 ---
 
-## Tarea 3 — `normalizarNombre` y `detectarPR`
+## Tarea 2 — `sugerirProximo`
 
 **Archivos:**
-- Modificar: `src/services/oneRepMax.js`
-- Modificar: `src/services/oneRepMax.test.js`
+- Modificar: `src/services/progresion.js`
+- Modificar: `src/services/progresion.test.js`
 
-**Consume:** `mejorSerie` de la tarea 2.
-**Produce:** `normalizarNombre(nombre) → string` y
-`detectarPR(mejorHoy, mejorPrevio) → { esPR: boolean, mejora: number }`.
-Ambos argumentos de `detectarPR` tienen la forma que devuelve `mejorSerie`
-(`{ serie, unaRM }`) o `null`.
+**Interfaces:**
+- Consume: `sesionesDeEjercicio` de la tarea 1.
+- Produce: `sugerirProximo(sesiones) → { accion, weight_kg, reps, motivo } | null`.
+  `accion` es `'subir' | 'sumar_reps' | 'mantener' | 'sin_rir'`. También produce las
+  constantes `INCREMENTO_KG = 2.5` y `RIR_PARA_SUBIR = 2`.
+
+**La regla.** Se mira la última sesión. De sus series se toman las **efectivas** — las que
+tienen `weight_kg > 0`, `reps` y `rir` — y de ellas la de **RIR mínimo**: la serie más dura
+es la que dice cuánto margen real quedó.
+
+| RIR mínimo | `accion` | Sugerencia |
+|---|---|---|
+| ≥ 2 | `subir` | peso + 2.5 kg, mismas reps |
+| 1 | `sumar_reps` | mismo peso, reps + 1 |
+| ≤ 0 | `mantener` | mismo peso, mismas reps |
+
+Devuelve `null` (no hay nada que sugerir) si no hay sesiones o si ninguna serie de la
+última tiene peso — futsal, cardio, peso corporal. Devuelve `accion: 'sin_rir'` con
+`weight_kg: null` cuando hay series con peso pero ninguna con RIR: la UI necesita
+distinguir "no puedo sugerir" de "me falta el dato que vos podés cargar".
 
 - [ ] **Paso 1: escribir el test que falla**
 
-Agregar al final de `src/services/oneRepMax.test.js` (sumar ambas funciones al import):
+Agregar al final de `src/services/progresion.test.js` (y sumar `sugerirProximo`,
+`INCREMENTO_KG` al import de arriba):
 
 ```js
-describe('normalizarNombre', () => {
-  it('pasa a minúsculas y recorta los bordes', () => {
-    expect(normalizarNombre('  Press Banca ')).toBe('press banca')
+// Construye la lista de sesiones directamente, sin pasar por sesionesDeEjercicio:
+// estos tests prueban la regla, no la agrupación.
+function sesion(date, series) {
+  return { date, series, mejor: null }
+}
+
+describe('sugerirProximo', () => {
+  it('sube el peso con RIR 2 o más', () => {
+    const r = sugerirProximo([sesion('2026-08-20', [
+      { weight_kg: 80, reps: 8, rir: 3 },
+      { weight_kg: 80, reps: 8, rir: 2 },
+    ])])
+    expect(r.accion).toBe('subir')
+    expect(r.weight_kg).toBe(80 + INCREMENTO_KG)
+    expect(r.reps).toBe(8)
   })
 
-  it('colapsa espacios internos', () => {
-    expect(normalizarNombre('Press    Banca')).toBe('press banca')
+  it('suma una repetición con RIR 1', () => {
+    const r = sugerirProximo([sesion('2026-08-20', [{ weight_kg: 80, reps: 8, rir: 1 }])])
+    expect(r.accion).toBe('sumar_reps')
+    expect(r.weight_kg).toBe(80)
+    expect(r.reps).toBe(9)
   })
 
-  it('devuelve string vacío si no recibe un string', () => {
-    expect(normalizarNombre(null)).toBe('')
-  })
-})
-
-describe('detectarPR', () => {
-  it('es PR cuando supera el 1RM histórico', () => {
-    const r = detectarPR({ unaRM: 105 }, { unaRM: 100 })
-    expect(r.esPR).toBe(true)
-    expect(r.mejora).toBeCloseTo(5, 2)
+  it('mantiene el peso con RIR 0', () => {
+    const r = sugerirProximo([sesion('2026-08-20', [{ weight_kg: 80, reps: 8, rir: 0 }])])
+    expect(r.accion).toBe('mantener')
+    expect(r.weight_kg).toBe(80)
+    expect(r.reps).toBe(8)
   })
 
-  it('no es PR cuando empata', () => {
-    expect(detectarPR({ unaRM: 100 }, { unaRM: 100 }).esPR).toBe(false)
+  it('usa el RIR mínimo, no el de la última serie', () => {
+    // La última serie tiene RIR 3, pero la más dura de la sesión tuvo RIR 0.
+    const r = sugerirProximo([sesion('2026-08-20', [
+      { weight_kg: 80, reps: 6, rir: 0 },
+      { weight_kg: 80, reps: 8, rir: 3 },
+    ])])
+    expect(r.accion).toBe('mantener')
+    expect(r.reps).toBe(6)
   })
 
-  it('no es PR cuando queda por debajo', () => {
-    expect(detectarPR({ unaRM: 95 }, { unaRM: 100 }).esPR).toBe(false)
+  it('mira solo la última sesión', () => {
+    const r = sugerirProximo([
+      sesion('2026-08-20', [{ weight_kg: 90, reps: 5, rir: 1 }]),
+      sesion('2026-08-10', [{ weight_kg: 80, reps: 8, rir: 3 }]),
+    ])
+    expect(r.weight_kg).toBe(90)
+    expect(r.accion).toBe('sumar_reps')
   })
 
-  it('no es PR la primera vez que se hace el ejercicio', () => {
-    expect(detectarPR({ unaRM: 100 }, null).esPR).toBe(false)
+  it('ignora las series sin peso', () => {
+    const r = sugerirProximo([sesion('2026-08-20', [
+      { weight_kg: null, reps: 20, rir: 0 },
+      { weight_kg: 80, reps: 8, rir: 3 },
+    ])])
+    expect(r.accion).toBe('subir')
   })
 
-  it('no es PR si hoy no hay serie estimable', () => {
-    expect(detectarPR(null, { unaRM: 100 }).esPR).toBe(false)
+  it('distingue RIR 0 de RIR ausente', () => {
+    const conCero = sugerirProximo([sesion('2026-08-20', [{ weight_kg: 80, reps: 8, rir: 0 }])])
+    const sinRir = sugerirProximo([sesion('2026-08-20', [{ weight_kg: 80, reps: 8, rir: null }])])
+    expect(conCero.accion).toBe('mantener')
+    expect(sinRir.accion).toBe('sin_rir')
+  })
+
+  it('avisa cuando hay peso pero falta el RIR', () => {
+    const r = sugerirProximo([sesion('2026-08-20', [{ weight_kg: 80, reps: 8, rir: null }])])
+    expect(r.accion).toBe('sin_rir')
+    expect(r.weight_kg).toBeNull()
+  })
+
+  it('devuelve null sin historial', () => {
+    expect(sugerirProximo([])).toBeNull()
+    expect(sugerirProximo(undefined)).toBeNull()
+  })
+
+  it('devuelve null si ninguna serie tiene peso (futsal, cardio)', () => {
+    expect(sugerirProximo([sesion('2026-08-20', [{ weight_kg: null, reps: null, rir: null }])])).toBeNull()
+  })
+
+  it('trata una serie con peso y RIR pero sin reps como no efectiva', () => {
+    expect(sugerirProximo([sesion('2026-08-20', [{ weight_kg: 80, reps: null, rir: 2 }])]).accion)
+      .toBe('sin_rir')
   })
 })
 ```
@@ -323,29 +319,64 @@ describe('detectarPR', () => {
 npm test
 ```
 
-Esperado: FAIL — `normalizarNombre is not a function`.
+Esperado: FAIL — `sugerirProximo is not a function`.
 
 - [ ] **Paso 3: implementar**
 
-Agregar a `src/services/oneRepMax.js`:
+Agregar a `src/services/progresion.js`:
 
 ```js
-// Los ejercicios se emparejan por nombre porque no hay catálogo. Sin esto,
-// "Press Banca" y "press banca " serían dos ejercicios distintos y se perdería
-// el histórico. No resuelve variantes de tipeo ("Press de banca"): ver la
-// limitación conocida en el spec.
-export function normalizarNombre(nombre) {
-  if (typeof nombre !== 'string') return ''
-  return nombre.trim().toLowerCase().replace(/\s+/g, ' ')
+export const INCREMENTO_KG = 2.5
+export const RIR_PARA_SUBIR = 2
+
+// RIR 0 es un valor válido y significativo (fallo muscular): hay que distinguirlo
+// de "no cargué el dato". Por eso no se usa `Number(x) || null`, que los mezcla.
+function rirDe(serie) {
+  const { rir } = serie
+  if (rir === null || rir === undefined || rir === '') return null
+  const n = Number(rir)
+  return Number.isFinite(n) ? n : null
 }
 
-// PR se define por 1RM estimado: engloba tanto subir el peso como hacer más
-// reps con el mismo peso. La primera vez que se hace un ejercicio no es récord.
-export function detectarPR(mejorHoy, mejorPrevio) {
-  if (!mejorHoy || !mejorPrevio) return { esPR: false, mejora: 0 }
-  const mejora = mejorHoy.unaRM - mejorPrevio.unaRM
-  if (mejora <= 0) return { esPR: false, mejora: 0 }
-  return { esPR: true, mejora }
+// Serie efectiva: la que informa sobre el esfuerzo real. Necesita las tres cosas,
+// porque la sugerencia se expresa como peso × reps y se decide por RIR.
+function esEfectiva(serie) {
+  return Number(serie.weight_kg) > 0
+    && Number.isFinite(Number(serie.reps))
+    && rirDe(serie) !== null
+}
+
+// Doble progresión por RIR sobre la última sesión del ejercicio.
+export function sugerirProximo(sesiones) {
+  const ultima = sesiones?.[0]
+  if (!ultima) return null
+
+  const conPeso = (ultima.series || []).filter(s => Number(s.weight_kg) > 0)
+  if (!conPeso.length) return null   // futsal, cardio, peso corporal
+
+  const efectivas = conPeso.filter(esEfectiva)
+  if (!efectivas.length) {
+    return { accion: 'sin_rir', weight_kg: null, reps: null, motivo: 'cargá el RIR para recibir sugerencias' }
+  }
+
+  // La serie más dura de la sesión (menor RIR) es la que dice cuánto margen
+  // quedó. Ante empate se queda con la primera, como mejorSerie.
+  let ref = efectivas[0]
+  for (const s of efectivas) if (rirDe(s) < rirDe(ref)) ref = s
+
+  const peso = Number(ref.weight_kg)
+  const reps = Number(ref.reps)
+  const rir = rirDe(ref)
+
+  if (rir >= RIR_PARA_SUBIR) {
+    return { accion: 'subir', weight_kg: peso + INCREMENTO_KG, reps, motivo: `cerraste con RIR ${rir}` }
+  }
+  if (rir === 1) {
+    return { accion: 'sumar_reps', weight_kg: peso, reps: reps + 1, motivo: 'RIR 1, sumá una rep' }
+  }
+  // RIR 0: llegar al fallo es una sesión dura, no un estancamiento. Consolidar el
+  // mismo peso es la respuesta. Bajar carga entra solo por la vía del deload.
+  return { accion: 'mantener', weight_kg: peso, reps, motivo: 'llegaste al fallo' }
 }
 ```
 
@@ -355,389 +386,787 @@ export function detectarPR(mejorHoy, mejorPrevio) {
 npm test
 ```
 
-Esperado: PASS, 21 tests.
+Esperado: PASS, 11 tests nuevos.
 
 - [ ] **Paso 5: lint y commit**
 
 ```bash
-npm run lint
-git add src/services/oneRepMax.js src/services/oneRepMax.test.js
-git commit -m "feat: deteccion de PR por 1RM estimado y normalizacion de nombres"
+npm run lint && npm test
+git add src/services/progresion.js src/services/progresion.test.js
+git commit -m "feat: sugerencia de proximo peso por doble progresion de RIR"
 ```
 
 ---
 
-## Tarea 4 — Migración aditiva: tabla `gym_sets`
+## Tarea 3 — `detectarEstancamiento`
 
 **Archivos:**
-- Crear: `supabase/migrations/20260826120000_create_gym_sets.sql`
+- Modificar: `src/services/progresion.js`
+- Modificar: `src/services/progresion.test.js`
 
-Esta tarea toca la base real. **No borra nada.**
+**Interfaces:**
+- Consume: la lista de sesiones de la tarea 1 (usa el campo `mejor`).
+- Produce: `detectarEstancamiento(sesiones) → { estancado: boolean, sesionesSinPR: number }`
+  y la constante `SESIONES_PARA_ESTANCAMIENTO = 3`.
 
-- [ ] **Paso 1: escribir la migración**
+**La regla.** Estancado = pasaron 3 o más sesiones desde aquella en que se alcanzó el mejor
+1RM histórico. Un empate no resetea el contador: se toma la **primera** sesión que alcanzó
+el máximo, coherente con que empatar no es PR. Requiere al menos 4 sesiones.
 
-Crear `supabase/migrations/20260826120000_create_gym_sets.sql`:
+- [ ] **Paso 1: escribir el test que falla**
 
-```sql
--- Modelo por serie para el registro de gimnasio.
--- Ver docs/superpowers/specs/2026-08-25-gym-series-1rm-pr-design.md
---
--- Esta migración es ADITIVA: crea la tabla, aplica RLS y backfillea desde los
--- datos existentes. Las columnas viejas de gym_exercises quedan intactas y se
--- borran en una migración posterior, una vez verificado el resultado.
+Agregar al final de `src/services/progresion.test.js` (sumar `detectarEstancamiento` al
+import):
 
-CREATE TABLE IF NOT EXISTS gym_sets (
-  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  exercise_id bigint NOT NULL REFERENCES gym_exercises(id) ON DELETE CASCADE,
-  set_number  int NOT NULL,
-  weight_kg   numeric,
-  reps        int,
-  rir         int,
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
+```js
+// Sesión con un único valor de mejor 1RM, que es lo único que mira la detección.
+function sesionConRM(date, unaRM) {
+  return { date, series: [], mejor: unaRM === null ? null : { serie: {}, unaRM } }
+}
 
-CREATE INDEX IF NOT EXISTS gym_sets_exercise_id_idx ON gym_sets (exercise_id);
+describe('detectarEstancamiento', () => {
+  it('marca estancado tras 3 sesiones sin superar el récord', () => {
+    // orden descendente: la más reciente primero
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 100),
+      sesionConRM('2026-08-13', 98),
+      sesionConRM('2026-08-06', 99),
+      sesionConRM('2026-07-30', 102),   // ← el récord, hace 3 sesiones
+    ])
+    expect(r.estancado).toBe(true)
+    expect(r.sesionesSinPR).toBe(3)
+  })
 
--- ── RLS ───────────────────────────────────────────────────────────────────────
--- gym_sets no tiene user_id: la pertenencia se deriva dos niveles arriba,
--- gym_sets → gym_exercises → gym_logs.user_id. Mismo patrón que meal_logs.
+  it('no marca estancado si el récord es reciente', () => {
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 105),   // ← récord en la última
+      sesionConRM('2026-08-13', 98),
+      sesionConRM('2026-08-06', 99),
+      sesionConRM('2026-07-30', 102),
+    ])
+    expect(r.estancado).toBe(false)
+    expect(r.sesionesSinPR).toBe(0)
+  })
 
-ALTER TABLE gym_sets ENABLE ROW LEVEL SECURITY;
+  it('un empate no resetea el contador', () => {
+    // Se repite 102 en la última sesión, pero empatar no es progresar.
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 102),
+      sesionConRM('2026-08-13', 98),
+      sesionConRM('2026-08-06', 99),
+      sesionConRM('2026-07-30', 102),
+    ])
+    expect(r.estancado).toBe(true)
+    expect(r.sesionesSinPR).toBe(3)
+  })
 
-CREATE POLICY "gym_sets: select own"
-  ON gym_sets FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM gym_exercises
-      JOIN gym_logs ON gym_logs.id = gym_exercises.log_id
-      WHERE gym_exercises.id = gym_sets.exercise_id
-        AND gym_logs.user_id = auth.uid()
-    )
-  );
+  it('nunca marca estancado con menos de 4 sesiones', () => {
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 90),
+      sesionConRM('2026-08-13', 95),
+      sesionConRM('2026-08-06', 100),
+    ])
+    expect(r.estancado).toBe(false)
+  })
 
-CREATE POLICY "gym_sets: insert own"
-  ON gym_sets FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM gym_exercises
-      JOIN gym_logs ON gym_logs.id = gym_exercises.log_id
-      WHERE gym_exercises.id = gym_sets.exercise_id
-        AND gym_logs.user_id = auth.uid()
-    )
-  );
+  it('ignora las sesiones sin 1RM estimable', () => {
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 100),
+      sesionConRM('2026-08-13', null),
+      sesionConRM('2026-08-06', 98),
+      sesionConRM('2026-07-30', 99),
+      sesionConRM('2026-07-23', 102),
+    ])
+    // Quedan 4 sesiones con 1RM; el récord está en la más antigua.
+    expect(r.estancado).toBe(true)
+    expect(r.sesionesSinPR).toBe(3)
+  })
 
-CREATE POLICY "gym_sets: update own"
-  ON gym_sets FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM gym_exercises
-      JOIN gym_logs ON gym_logs.id = gym_exercises.log_id
-      WHERE gym_exercises.id = gym_sets.exercise_id
-        AND gym_logs.user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "gym_sets: delete own"
-  ON gym_sets FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM gym_exercises
-      JOIN gym_logs ON gym_logs.id = gym_exercises.log_id
-      WHERE gym_exercises.id = gym_sets.exercise_id
-        AND gym_logs.user_id = auth.uid()
-    )
-  );
-
--- ── Backfill (idempotente) ────────────────────────────────────────────────────
--- Cada ejercicio con sets = N genera N series idénticas. Solo inserta para
--- ejercicios que todavía no tienen series, así se puede volver a correr sin
--- duplicar — necesario para levantar sesiones cargadas entre esta migración y
--- el deploy de la UI nueva.
-
-INSERT INTO gym_sets (exercise_id, set_number, weight_kg, reps, rir)
-SELECT e.id, s.n, e.weight_kg, e.reps, e.rir
-FROM gym_exercises e
-CROSS JOIN LATERAL generate_series(1, GREATEST(COALESCE(e.sets, 1), 1)) AS s(n)
-WHERE NOT EXISTS (
-  SELECT 1 FROM gym_sets gs WHERE gs.exercise_id = e.id
-);
+  it('devuelve no estancado sin sesiones', () => {
+    expect(detectarEstancamiento([]).estancado).toBe(false)
+    expect(detectarEstancamiento(undefined).estancado).toBe(false)
+  })
+})
 ```
 
-- [ ] **Paso 2: hacer backup antes de tocar la base**
-
-En Supabase → Database → Backups, confirmar que hay un backup reciente. Hay una sola
-base y no hay ambiente de desarrollo separado.
-
-- [ ] **Paso 3: correr la migración en el editor SQL de Supabase**
-
-Pegar el archivo completo y ejecutar.
-
-- [ ] **Paso 4: verificar que el backfill cuadra**
-
-Correr en el editor SQL:
-
-```sql
-SELECT
-  (SELECT SUM(GREATEST(COALESCE(sets, 1), 1)) FROM gym_exercises) AS esperado,
-  (SELECT COUNT(*) FROM gym_sets)                                 AS obtenido;
-```
-
-Esperado: las dos columnas dan el mismo número.
-
-- [ ] **Paso 5: verificar que RLS quedó activo**
-
-```sql
-SELECT relrowsecurity FROM pg_class WHERE relname = 'gym_sets';
-```
-
-Esperado: `true`.
-
-```sql
-SELECT policyname FROM pg_policies WHERE tablename = 'gym_sets';
-```
-
-Esperado: 4 filas (select / insert / update / delete).
-
-- [ ] **Paso 6: commit**
+- [ ] **Paso 2: correr y verificar que falla**
 
 ```bash
-git add supabase/migrations/20260826120000_create_gym_sets.sql
-git commit -m "feat(db): tabla gym_sets con RLS y backfill idempotente"
+npm test
+```
+
+Esperado: FAIL — `detectarEstancamiento is not a function`.
+
+- [ ] **Paso 3: implementar**
+
+Agregar a `src/services/progresion.js`:
+
+```js
+export const SESIONES_PARA_ESTANCAMIENTO = 3
+
+// Estancado = pasaron N sesiones desde aquella en que se alcanzó el mejor 1RM.
+// Recibe las sesiones en orden descendente (la más reciente primero).
+export function detectarEstancamiento(sesiones) {
+  const conMejor = (sesiones || []).filter(s => s?.mejor)
+  // Con menos de N+1 sesiones no hay evidencia suficiente de estancamiento.
+  if (conMejor.length <= SESIONES_PARA_ESTANCAMIENTO) return { estancado: false, sesionesSinPR: 0 }
+
+  const maximo = Math.max(...conMejor.map(s => s.mejor.unaRM))
+  // El récord se atribuye a la PRIMERA sesión que lo alcanzó (la más antigua),
+  // así un empate posterior no resetea el contador: empatar no es progresar.
+  // Como la lista viene descendente, se recorre desde el final.
+  let indiceRecord = 0
+  for (let i = conMejor.length - 1; i >= 0; i--) {
+    if (conMejor[i].mejor.unaRM === maximo) { indiceRecord = i; break }
+  }
+
+  // En orden descendente, el índice del récord es la cantidad de sesiones posteriores.
+  const sesionesSinPR = indiceRecord
+  return { estancado: sesionesSinPR >= SESIONES_PARA_ESTANCAMIENTO, sesionesSinPR }
+}
+```
+
+- [ ] **Paso 4: correr y verificar que pasa**
+
+```bash
+npm test
+```
+
+Esperado: PASS, 6 tests nuevos.
+
+- [ ] **Paso 5: lint y commit**
+
+```bash
+npm run lint && npm test
+git add src/services/progresion.js src/services/progresion.test.js
+git commit -m "feat: deteccion de estancamiento por sesiones desde el record"
 ```
 
 ---
 
-## Tarea 5 — Leer y escribir series desde `Gimnasio.jsx`
+## Tarea 4 — `sugerirDeload` y `progresionDe`
 
 **Archivos:**
+- Modificar: `src/services/progresion.js`
+- Modificar: `src/services/progresion.test.js`
+
+**Interfaces:**
+- Consume: `pesoMaximo(series) → number | null` de `src/services/oneRepMax.js`; y
+  `sesionesDeEjercicio`, `sugerirProximo`, `detectarEstancamiento` de las tareas 1-3.
+- Produce: `sugerirDeload(sesiones) → { weight_kg } | null`, la constante
+  `FACTOR_DELOAD = 0.9`, y `progresionDe(filas) → { sugerencia, estancamiento, deload }`.
+  `progresionDe` es la única función que consume la UI; recibe las mismas `filas` que
+  `sesionesDeEjercicio`.
+
+**La regla del deload.** `redondearAbajo(pesoMaximo(última sesión) × 0.9, 2.5)`. Se usa
+`pesoMaximo` y no el peso de la mejor serie por 1RM porque el deload se razona en kilos
+sobre la barra, no en 1RM estimado. El redondeo va **hacia abajo** para que sea un alivio
+real y no un cambio cosmético. Devuelve `null` si la última sesión ya fue más liviana que
+la anterior: el deload ya está en curso y re-ofrecerlo lo convertiría en ruido.
+
+`progresionDe` solo calcula el deload cuando hay estancamiento.
+
+- [ ] **Paso 1: escribir el test que falla**
+
+Agregar al final de `src/services/progresion.test.js` (sumar `sugerirDeload` y
+`progresionDe` al import):
+
+```js
+// Sesión con series reales, que es lo que mira el deload (usa pesoMaximo).
+function sesionConSeries(date, series) {
+  return { date, series, mejor: null }
+}
+
+describe('sugerirDeload', () => {
+  it('baja un 10% redondeando hacia abajo a 2.5', () => {
+    const r = sugerirDeload([sesionConSeries('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 0 }])])
+    expect(r.weight_kg).toBe(90)
+  })
+
+  it('redondea hacia abajo cuando no da un múltiplo exacto', () => {
+    // 82.5 × 0.9 = 74.25 → 72.5
+    const r = sugerirDeload([sesionConSeries('2026-08-20', [{ weight_kg: 82.5, reps: 8, rir: 0 }])])
+    expect(r.weight_kg).toBe(72.5)
+  })
+
+  it('usa el peso máximo de la sesión, no el de la mejor serie por 1RM', () => {
+    // 90×1 pesa más; 80×8 tiene mayor 1RM estimado. El deload mira los kilos.
+    const r = sugerirDeload([sesionConSeries('2026-08-20', [
+      { weight_kg: 80, reps: 8, rir: 0 },
+      { weight_kg: 90, reps: 1, rir: 0 },
+    ])])
+    expect(r.weight_kg).toBe(80)   // 90 × 0.9 = 81 → 80
+  })
+
+  it('no se re-ofrece si la última sesión ya bajó el peso', () => {
+    const r = sugerirDeload([
+      sesionConSeries('2026-08-20', [{ weight_kg: 90, reps: 8, rir: 2 }]),
+      sesionConSeries('2026-08-13', [{ weight_kg: 100, reps: 8, rir: 0 }]),
+    ])
+    expect(r).toBeNull()
+  })
+
+  it('sí se ofrece si la última sesión mantuvo el peso', () => {
+    const r = sugerirDeload([
+      sesionConSeries('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 0 }]),
+      sesionConSeries('2026-08-13', [{ weight_kg: 100, reps: 8, rir: 0 }]),
+    ])
+    expect(r.weight_kg).toBe(90)
+  })
+
+  it('devuelve null sin sesiones o sin peso', () => {
+    expect(sugerirDeload([])).toBeNull()
+    expect(sugerirDeload([sesionConSeries('2026-08-20', [{ weight_kg: null, reps: 20, rir: 0 }])])).toBeNull()
+  })
+
+  it('devuelve null si el peso es tan bajo que el deload no baja nada', () => {
+    // 2.5 × 0.9 = 2.25 → redondeo abajo a 2.5 da 0
+    expect(sugerirDeload([sesionConSeries('2026-08-20', [{ weight_kg: 2.5, reps: 8, rir: 0 }])])).toBeNull()
+  })
+})
+
+describe('progresionDe', () => {
+  it('compone sugerencia, estancamiento y deload desde las filas crudas', () => {
+    const filas = [
+      fila('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 3 }]),
+      fila('2026-08-13', [{ weight_kg: 100, reps: 7, rir: 1 }]),
+      fila('2026-08-06', [{ weight_kg: 100, reps: 7, rir: 1 }]),
+      fila('2026-07-30', [{ weight_kg: 100, reps: 9, rir: 0 }]),   // récord
+    ]
+    const r = progresionDe(filas)
+    expect(r.sugerencia.accion).toBe('subir')
+    expect(r.sugerencia.weight_kg).toBe(102.5)
+    expect(r.estancamiento.estancado).toBe(true)
+    expect(r.deload.weight_kg).toBe(90)
+  })
+
+  it('no calcula deload si no hay estancamiento', () => {
+    const filas = [fila('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 3 }])]
+    const r = progresionDe(filas)
+    expect(r.estancamiento.estancado).toBe(false)
+    expect(r.deload).toBeNull()
+  })
+
+  it('devuelve sugerencia null para un ejercicio sin historial', () => {
+    const r = progresionDe([])
+    expect(r.sugerencia).toBeNull()
+    expect(r.deload).toBeNull()
+  })
+})
+```
+
+- [ ] **Paso 2: correr y verificar que falla**
+
+```bash
+npm test
+```
+
+Esperado: FAIL — `sugerirDeload is not a function`.
+
+- [ ] **Paso 3: implementar**
+
+En `src/services/progresion.js`, cambiar el import de arriba para sumar `pesoMaximo`:
+
+```js
+import { mejorSerie, pesoMaximo } from './oneRepMax'
+```
+
+Y agregar al final:
+
+```js
+export const FACTOR_DELOAD = 0.9
+
+const ESCALON_KG = 2.5
+
+// Baja un 10% redondeando hacia abajo al múltiplo de 2.5, para que el alivio sea
+// real y no cosmético. Se basa en pesoMaximo y no en la mejor serie por 1RM: el
+// deload se razona en kilos sobre la barra.
+export function sugerirDeload(sesiones) {
+  const ultima = sesiones?.[0]
+  if (!ultima) return null
+
+  const pesoUltima = pesoMaximo(ultima.series || [])
+  if (!pesoUltima) return null
+
+  // Si ya venís bajando, el deload está en curso: re-ofrecerlo sería ruido.
+  const anterior = sesiones[1]
+  const pesoAnterior = anterior ? pesoMaximo(anterior.series || []) : null
+  if (pesoAnterior !== null && pesoUltima < pesoAnterior) return null
+
+  const weight_kg = Math.floor((pesoUltima * FACTOR_DELOAD) / ESCALON_KG) * ESCALON_KG
+  if (weight_kg <= 0 || weight_kg >= pesoUltima) return null
+  return { weight_kg }
+}
+
+// Única función que consume la UI. Recibe las filas crudas de gym_exercises de un
+// mismo ejercicio y devuelve todo lo que hay que mostrar.
+export function progresionDe(filas) {
+  const sesiones = sesionesDeEjercicio(filas)
+  const estancamiento = detectarEstancamiento(sesiones)
+  return {
+    sugerencia: sugerirProximo(sesiones),
+    estancamiento,
+    // El deload solo tiene sentido como respuesta a un estancamiento.
+    deload: estancamiento.estancado ? sugerirDeload(sesiones) : null,
+  }
+}
+```
+
+- [ ] **Paso 4: correr y verificar que pasa**
+
+```bash
+npm test
+```
+
+Esperado: PASS, 10 tests nuevos. Total de la suite: 55 tests
+(21 de `oneRepMax` + 34 de `progresion`).
+
+- [ ] **Paso 5: lint y commit**
+
+```bash
+npm run lint && npm test
+git add src/services/progresion.js src/services/progresion.test.js
+git commit -m "feat: sugerencia de deload y compositor progresionDe"
+```
+
+---
+
+## Tarea 5 — Extraer los componentes de presentación
+
+**Archivos:**
+- Crear: `src/components/gym.jsx`
 - Modificar: `src/pages/Gimnasio.jsx`
 
-**Consume:** la tabla `gym_sets` de la tarea 4.
+**Interfaces:**
+- Produce: `src/components/gym.jsx` exportando `TabButton`, `BadgePR`, `Pill`,
+  `PrimarySmallButton`, `ActionButton`, `TinyGhostButton`, `TinyDangerButton`,
+  `ModalPrimaryButton`, `ModalSecondaryButton`, con las mismas props que hoy.
 
-Después de esta tarea la app escribe series de verdad y las columnas viejas dejan de
-leerse. El modal pasa de cuatro campos sueltos a una lista de series.
+`Gimnasio.jsx` tiene 580 líneas y nueve sub-componentes de presentación al final. Las
+tareas 6-8 le suman chips; sin este paso el archivo llega a ~700 líneas. **Es un movimiento
+mecánico: no se cambia una sola línea del cuerpo de los componentes.**
 
-- [ ] **Paso 1: traer las series en las queries de lectura**
+- [ ] **Paso 1: crear el archivo con los componentes movidos**
 
-En `cargarHoy()` (`src/pages/Gimnasio.jsx:55`), reemplazar la query de ejercicios:
-
-```js
-const { data: ejs } = await supabase
-  .from('gym_exercises')
-  .select('*, gym_sets(*)')
-  .eq('log_id', sesion.id)
-  .order('id')
-  .order('set_number', { referencedTable: 'gym_sets' })
-```
-
-En `cargarHistorial()` (`src/pages/Gimnasio.jsx:62`):
-
-```js
-const { data } = await supabase
-  .from('gym_logs')
-  .select('*, gym_exercises(*, gym_sets(*))')
-  .eq('user_id', session.user.id)
-  .order('date', { ascending: false })
-  .limit(20)
-```
-
-- [ ] **Paso 2: cambiar la forma del estado del formulario**
-
-Reemplazar el `useState` de `formEj` (`src/pages/Gimnasio.jsx:39`):
-
-```js
-const SERIE_VACIA = { weight_kg: '', reps: '', rir: '' }
-const [formEj, setFormEj] = useState({ exercise_name: '', notes: '', series: [{ ...SERIE_VACIA }] })
-```
-
-(`SERIE_VACIA` va a nivel de módulo, arriba del componente, junto a `RUTINAS`.)
-
-- [ ] **Paso 3: reescribir el guardado**
-
-Reemplazar `guardarEjercicio()` (`src/pages/Gimnasio.jsx:95-101`):
-
-```js
-async function guardarEjercicio() {
-  setSaving(true)
-  const base = { exercise_name: formEj.exercise_name, notes: formEj.notes, log_id: sesionHoy.id }
-
-  let exerciseId
-  if (modalEj === 'nuevo') {
-    const { data } = await supabase.from('gym_exercises').insert(base).select()
-    exerciseId = data?.[0]?.id
-  } else {
-    exerciseId = modalEj.id
-    await supabase.from('gym_exercises').update(base).eq('id', exerciseId)
-    await supabase.from('gym_sets').delete().eq('exercise_id', exerciseId)
-  }
-
-  const filas = formEj.series.map((s, i) => ({
-    exercise_id: exerciseId,
-    set_number: i + 1,
-    weight_kg: s.weight_kg === '' ? null : Number(s.weight_kg),
-    reps: s.reps === '' ? null : Number(s.reps),
-    // RIR 0 es un valor válido y significativo: comparar contra '' y no usar
-    // `Number(x) || null`, que lo convertiría en null.
-    rir: s.rir === '' ? null : Number(s.rir),
-  }))
-  if (filas.length) await supabase.from('gym_sets').insert(filas)
-
-  await cargarHoy(); await cargarHistorial(); setSaving(false); setModalEj(null)
-}
-```
-
-- [ ] **Paso 4: adaptar los abridores del modal**
-
-Reemplazar `abrirNuevoEj()` y `abrirEditarEj()` (`src/pages/Gimnasio.jsx:109-117`):
-
-```js
-function abrirNuevoEj() {
-  setFormEj({ exercise_name: '', notes: '', series: [{ ...SERIE_VACIA }] })
-  setModalEj('nuevo')
-}
-
-function abrirEditarEj(ej) {
-  const series = (ej.gym_sets || [])
-    .slice()
-    .sort((a, b) => a.set_number - b.set_number)
-    .map(s => ({
-      weight_kg: s.weight_kg ?? '',
-      reps: s.reps ?? '',
-      rir: s.rir ?? '',
-    }))
-  setFormEj({
-    exercise_name: ej.exercise_name,
-    notes: ej.notes || '',
-    series: series.length ? series : [{ ...SERIE_VACIA }],
-  })
-  setModalEj(ej)
-}
-```
-
-- [ ] **Paso 5: agregar los helpers de edición de series**
-
-Dentro del componente, junto a los otros handlers:
-
-```js
-function actualizarSerie(i, campo, valor) {
-  setFormEj(f => ({
-    ...f,
-    series: f.series.map((s, idx) => (idx === i ? { ...s, [campo]: valor } : s)),
-  }))
-}
-
-function agregarSerie() {
-  setFormEj(f => ({ ...f, series: [...f.series, { ...SERIE_VACIA }] }))
-}
-
-// Cargar 4 series iguales no puede costar 4 veces el trabajo: es el caso más
-// frecuente y sin esto la carga empeora respecto del formulario anterior.
-function duplicarUltimaSerie() {
-  setFormEj(f => ({ ...f, series: [...f.series, { ...f.series[f.series.length - 1] }] }))
-}
-
-function quitarSerie(i) {
-  setFormEj(f => ({ ...f, series: f.series.filter((_, idx) => idx !== i) }))
-}
-```
-
-- [ ] **Paso 6: reemplazar la grilla de inputs del modal**
-
-En el modal (`src/pages/Gimnasio.jsx:308-316`), reemplazar la grilla de cuatro inputs por
-la lista de series:
+Crear `src/components/gym.jsx` con esta cabecera, y **cortar y pegar** debajo los nueve
+componentes tal cual están hoy en `src/pages/Gimnasio.jsx` (`TabButton` en la línea 36 y
+`BadgePR`, `Pill`, `PrimarySmallButton`, `ActionButton`, `TinyGhostButton`,
+`TinyDangerButton`, `ModalPrimaryButton`, `ModalSecondaryButton` a partir de la 508),
+agregándole `export` a cada uno:
 
 ```jsx
-<div style={{ fontSize: '12px', color: C.textMuted, marginBottom: '6px' }}>Series</div>
+// src/components/gym.jsx
+// Componentes de presentación de la pantalla de Gimnasio. Vivían dentro de
+// Gimnasio.jsx; se movieron acá para que la página quede con la lógica de I/O.
+// Estilos inline y tokens de theme.js, como todo el proyecto.
 
-{formEj.series.map((s, i) => (
-  <div key={i} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 1fr 1fr 32px', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-    <span style={{ fontSize: '12px', color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
-    <input type="number" inputMode="decimal" value={s.weight_kg} placeholder="kg"
-      onChange={e => actualizarSerie(i, 'weight_kg', e.target.value)} style={{ ...inp, margin: 0 }} />
-    <input type="number" inputMode="numeric" value={s.reps} placeholder="reps"
-      onChange={e => actualizarSerie(i, 'reps', e.target.value)} style={{ ...inp, margin: 0 }} />
-    <input type="number" inputMode="numeric" value={s.rir} placeholder="RIR"
-      onChange={e => actualizarSerie(i, 'rir', e.target.value)} style={{ ...inp, margin: 0 }} />
-    {formEj.series.length > 1
-      ? <TinyDangerButton onClick={() => quitarSerie(i)}><IconClose size={11} /></TinyDangerButton>
-      : <span />}
-  </div>
-))}
-
-<div style={{ display: 'flex', gap: '8px', margin: '4px 0 16px' }}>
-  <TinyGhostButton onClick={agregarSerie}>+ Serie</TinyGhostButton>
-  <TinyGhostButton onClick={duplicarUltimaSerie}>Duplicar última</TinyGhostButton>
-</div>
+import { C } from '../theme'
+import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
+import { IconTrophy } from './icons'
 ```
 
-- [ ] **Paso 7: verificar a mano en la app**
+- [ ] **Paso 2: actualizar los imports de `Gimnasio.jsx`**
+
+Borrar de `src/pages/Gimnasio.jsx` los nueve componentes movidos, e importar:
+
+```js
+import {
+  TabButton, BadgePR, Pill, PrimarySmallButton, ActionButton,
+  TinyGhostButton, TinyDangerButton, ModalPrimaryButton, ModalSecondaryButton,
+} from '../components/gym'
+```
+
+Después de mover `BadgePR`, `IconTrophy` ya no se usa en `Gimnasio.jsx`: sacarlo de su
+import de `../components/icons`. Si `focusRing` o `useInteractiveStyle` quedaran sin uso en
+la página, sacarlos también — `npm run lint` lo va a marcar.
+
+- [ ] **Paso 3: verificar que no cambió nada**
+
+```bash
+npm run lint && npm test && npm run build
+```
+
+Esperado: sin errores de lint (en particular, ningún import sin usar), 55 tests en verde,
+build exitoso.
 
 ```bash
 npm run dev
 ```
 
-En `localhost:5173` → Gimnasio → Hoy:
-1. Crear una sesión y agregar un ejercicio con 3 series de distinto peso.
-2. Guardar, recargar la página: las 3 series vuelven con sus valores y en orden.
-3. Editar el ejercicio, borrar la serie del medio, guardar: quedan 2 series renumeradas 1 y 2.
-4. Cargar una serie con **RIR 0** y verificar que al reabrir sigue diciendo 0 y no está vacía.
-5. Usar "Duplicar última" y confirmar que copia peso, reps y RIR.
+En `localhost:5173` → Gimnasio: recorrer las pestañas Hoy e Historial, abrir el modal de un
+ejercicio, y confirmar que **todo se ve exactamente igual que antes** — botones, badge de
+PR, pills, tabs. Achicar la ventana por debajo de 640px y repetir.
 
-- [ ] **Paso 8: lint, tests y commit**
+- [ ] **Paso 4: commit**
 
 ```bash
-npm run lint && npm test
-git add src/pages/Gimnasio.jsx
-git commit -m "feat: carga de ejercicios serie por serie"
+git add src/components/gym.jsx src/pages/Gimnasio.jsx
+git commit -m "refactor: extraer componentes de presentacion de Gimnasio"
 ```
 
 ---
 
-## Tarea 6 — La plantilla también siembra series
+## Tarea 6 — Chips de progresión y estancamiento
+
+**Archivos:**
+- Modificar: `src/components/icons.jsx`
+- Modificar: `src/components/gym.jsx`
+- Modificar: `src/pages/Gimnasio.jsx`
+
+**Interfaces:**
+- Consume: `progresionDe` de la tarea 4; `normalizarNombre` y `mejorSerie` de
+  `oneRepMax.js`; los componentes de la tarea 5.
+- Produce: `ChipProgresion({ sugerencia })` y `ChipEstancado({ sesionesSinPR })` en
+  `src/components/gym.jsx`; `IconTrendingUp` e `IconTrendingDown` en `icons.jsx`.
+
+- [ ] **Paso 1: agregar los íconos**
+
+Al final de `src/components/icons.jsx`, siguiendo el lenguaje del resto (viewBox 24×24,
+stroke 2, round caps):
+
+```jsx
+export function IconTrendingUp(p) {
+  return <Svg {...p}><polyline points="3 17 9 11 13 15 21 7" /><polyline points="15 7 21 7 21 13" /></Svg>
+}
+export function IconTrendingDown(p) {
+  return <Svg {...p}><polyline points="3 7 9 13 13 9 21 17" /><polyline points="15 17 21 17 21 11" /></Svg>
+}
+```
+
+- [ ] **Paso 2: agregar los chips**
+
+En `src/components/gym.jsx`, sumar `IconWarning`, `IconTrendingUp` al import de `./icons` y
+agregar al final:
+
+```jsx
+// Base visual compartida con BadgePR: píldora chica, fondo xxxDim, borde al 40%.
+function Chip({ color, dim, borde = true, children }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px',
+      background: dim, color, border: borde ? `1px solid ${color}40` : `1px solid ${C.border}`,
+    }}>
+      {children}
+    </span>
+  )
+}
+
+// La sugerencia siempre viaja con su motivo: un número raro se detecta leyéndolo.
+export function ChipProgresion({ sugerencia }) {
+  if (!sugerencia) return null
+
+  if (sugerencia.accion === 'sin_rir') {
+    return <Chip color={C.textMuted} dim={C.surfaceHigh} borde={false}>{sugerencia.motivo}</Chip>
+  }
+  if (sugerencia.accion === 'subir') {
+    return (
+      <Chip color={C.accentText} dim={C.accentDim}>
+        <IconTrendingUp size={11} color={C.accentText} />
+        {sugerencia.weight_kg} kg · {sugerencia.motivo}
+      </Chip>
+    )
+  }
+  if (sugerencia.accion === 'sumar_reps') {
+    return (
+      <Chip color={C.blue} dim={C.blueDim}>
+        {sugerencia.weight_kg} kg × {sugerencia.reps} · {sugerencia.motivo}
+      </Chip>
+    )
+  }
+  return (
+    <Chip color={C.textMuted} dim={C.surfaceHigh} borde={false}>
+      {sugerencia.weight_kg} kg × {sugerencia.reps} · {sugerencia.motivo}
+    </Chip>
+  )
+}
+
+export function ChipEstancado({ sesionesSinPR }) {
+  return (
+    <Chip color={C.red} dim={C.redDim}>
+      <IconWarning size={11} color={C.red} />
+      {sesionesSinPR} sesiones sin PR
+    </Chip>
+  )
+}
+```
+
+- [ ] **Paso 3: extender la query del histórico**
+
+En `src/pages/Gimnasio.jsx`, la función `cargarHistoricoPR()` (línea 69) ya trae el
+histórico completo excluyendo hoy. Se le suma `rir` a las series y se le agrega el cálculo
+de progresión sobre los mismos datos. Reemplazarla entera por:
+
+```js
+// Una sola query alimenta las dos derivaciones: mejor 1RM histórico (para el PR)
+// y progresión (sugerencia + estancamiento + deload). Excluye la sesión de hoy:
+// si no, el récord de hoy se compararía consigo mismo.
+async function cargarHistorico() {
+  const { data } = await supabase
+    .from('gym_exercises')
+    .select('exercise_name, gym_sets(weight_kg, reps, rir), gym_logs!inner(user_id, date)')
+    .eq('gym_logs.user_id', session.user.id)
+    .neq('gym_logs.date', hoy)
+
+  // Agrupar por nombre normalizado: la normalización vive en JS y la base no la conoce.
+  const porNombre = {}
+  for (const ej of data || []) {
+    const clave = normalizarNombre(ej.exercise_name)
+    if (!porNombre[clave]) porNombre[clave] = []
+    porNombre[clave].push(ej)
+  }
+
+  const mapaPR = {}
+  const mapaProgresion = {}
+  for (const [clave, filas] of Object.entries(porNombre)) {
+    for (const ej of filas) {
+      const mejor = mejorSerie(ej.gym_sets || [])
+      if (!mejor) continue
+      if (!mapaPR[clave] || mejor.unaRM > mapaPR[clave].unaRM) mapaPR[clave] = mejor
+    }
+    mapaProgresion[clave] = progresionDe(filas)
+  }
+  setHistoricoPR(mapaPR)
+  setProgresiones(mapaProgresion)
+}
+```
+
+- [ ] **Paso 4: actualizar el estado y las llamadas**
+
+Junto a `const [historicoPR, setHistoricoPR] = useState({})` (línea 60):
+
+```js
+const [progresiones, setProgresiones] = useState({})
+```
+
+Renombrar las tres llamadas a `cargarHistoricoPR()` por `cargarHistorico()`: el `useEffect`
+inicial, el final de `cargarPlantilla()` y el final de `guardarEjercicio()`. Verificar con:
+
+```bash
+git grep -n "cargarHistoricoPR" src/
+```
+
+Esperado: sin resultados.
+
+Y agregar el helper junto a `prDe` (línea 87):
+
+```js
+function progresionDeEj(ej) {
+  return progresiones[normalizarNombre(ej.exercise_name)] || null
+}
+```
+
+- [ ] **Paso 5: importar lo nuevo en Gimnasio**
+
+```js
+import { progresionDe } from '../services/progresion'
+import {
+  TabButton, BadgePR, Pill, PrimarySmallButton, ActionButton,
+  TinyGhostButton, TinyDangerButton, ModalPrimaryButton, ModalSecondaryButton,
+  ChipProgresion, ChipEstancado,
+} from '../components/gym'
+```
+
+- [ ] **Paso 6: mostrar los chips en la vista mobile**
+
+Ubicar por contenido, no por número de línea: la tarea 5 corrió las líneas. El ancla es el
+bloque de la tarjeta mobile donde conviven el nombre y el badge (antes de la tarea 5,
+líneas 340-342):
+
+```jsx
+<span style={{ fontWeight: 600, fontSize: '14px', color: C.textPrimary }}>{ej.exercise_name}</span>
+{prDe(ej).esPR && <BadgePR mejora={prDe(ej).mejora} />}
+```
+
+Agregar **debajo** del contenedor flex que envuelve a esos dos:
+
+```jsx
+{progresionDeEj(ej) && (
+  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+    <ChipProgresion sugerencia={progresionDeEj(ej).sugerencia} />
+    {progresionDeEj(ej).estancamiento.estancado && (
+      <ChipEstancado sesionesSinPR={progresionDeEj(ej).estancamiento.sesionesSinPR} />
+    )}
+  </div>
+)}
+```
+
+- [ ] **Paso 7: mostrar los chips en la tabla de desktop**
+
+Mismo bloque, en la primera `<td>` de la fila de ejercicio de la tabla desktop — la que
+tiene `fontWeight: 600` y contiene el `<span>{ej.exercise_name}</span>` junto al `BadgePR`
+(antes de la tarea 5, líneas 381-385). Va debajo del contenedor flex de esos dos, igual que
+en mobile.
+
+- [ ] **Paso 8: verificar a mano**
+
+```bash
+npm run dev
+```
+
+En `localhost:5173` → Gimnasio → Hoy. Para preparar los casos hay que crear sesiones con
+fecha pasada: cargarlas normalmente y después editar `date` en el editor de Supabase.
+
+1. Ejercicio "Press banca" en una sesión pasada con `80×8 RIR 3` → hoy el chip dice
+   **`↑ 82.5 kg · cerraste con RIR 3`** en verde.
+2. Cambiar esa sesión pasada a `80×8 RIR 1` → el chip dice
+   **`80 kg × 9 · RIR 1, sumá una rep`** en azul.
+3. Cambiarla a `80×8 RIR 0` → **`80 kg × 8 · llegaste al fallo`** en gris.
+4. Series con RIR `3, 2, 0` en la sesión pasada → el chip usa el **0**, no el 3: dice
+   "llegaste al fallo". Es la verificación de que se toma el mínimo.
+5. Sesión pasada con peso pero sin ningún RIR → chip gris
+   **`cargá el RIR para recibir sugerencias`**.
+6. Ejercicio nuevo, sin historial → **ningún chip**.
+7. Ejercicio de futsal o cardio (sin peso) → **ningún chip**, sin romperse.
+8. Cuatro sesiones pasadas del mismo ejercicio donde la más antigua tiene el mejor 1RM →
+   aparece además el chip rojo **`3 sesiones sin PR`**.
+9. Escribir el ejercicio de hoy como `"  press   BANCA "` → igual encuentra el histórico y
+   muestra el chip (normalización de nombre).
+10. Achicar la ventana por debajo de 640px y confirmar que los chips se ven bien en mobile,
+    sin desbordar.
+
+- [ ] **Paso 9: lint, tests y commit**
+
+```bash
+npm run lint && npm test
+git add src/components/icons.jsx src/components/gym.jsx src/pages/Gimnasio.jsx
+git commit -m "feat: chips de sugerencia de progresion y estancamiento"
+```
+
+---
+
+## Tarea 7 — Chip de deload con acción
+
+**Archivos:**
+- Modificar: `src/components/gym.jsx`
+- Modificar: `src/pages/Gimnasio.jsx`
+
+**Interfaces:**
+- Consume: el campo `deload` de `progresionDe` (tarea 4); `TinyGhostButton` de la tarea 5.
+- Produce: `ChipDeload({ weight_kg, onAplicar })` en `src/components/gym.jsx`.
+
+Es el único chip con acción, porque es la única sugerencia que **baja** la carga: subir por
+defecto es lo que se espera de un plan de progresión, bajar en silencio no. `aplicar`
+reescribe el peso de todas las series del ejercicio en el modal **sin guardar**: se puede
+seguir editando o cancelar.
+
+- [ ] **Paso 1: agregar el chip**
+
+Al final de `src/components/gym.jsx`, sumando `IconTrendingDown` al import de `./icons`:
+
+```jsx
+export function ChipDeload({ weight_kg, onAplicar }) {
+  return (
+    <Chip color={C.yellow} dim={C.yellowDim}>
+      <IconTrendingDown size={11} color={C.yellow} />
+      Probar deload: {weight_kg} kg
+      <TinyGhostButton onClick={onAplicar}>aplicar</TinyGhostButton>
+    </Chip>
+  )
+}
+```
+
+- [ ] **Paso 2: agregar el handler en Gimnasio**
+
+En `src/pages/Gimnasio.jsx`, junto a los otros helpers de edición de series
+(`actualizarSerie`, `agregarSerie`, …):
+
+```js
+// Reescribe el peso de todas las series del formulario. No guarda: el usuario
+// sigue pudiendo editar o cancelar.
+function aplicarPesoATodasLasSeries(weight_kg) {
+  setFormEj(f => ({ ...f, series: f.series.map(s => ({ ...s, weight_kg: String(weight_kg) })) }))
+}
+```
+
+- [ ] **Paso 3: mostrar el chip en el modal de ejercicio**
+
+El deload se aplica sobre el formulario, así que el chip va **dentro del modal**, arriba de
+la lista de series. En el modal, justo antes del `<div>` que dice "Series":
+
+```jsx
+{modalEj !== 'nuevo' && progresionDeEj(modalEj)?.deload && (
+  <div style={{ marginBottom: '12px' }}>
+    <ChipDeload
+      weight_kg={progresionDeEj(modalEj).deload.weight_kg}
+      onAplicar={() => aplicarPesoATodasLasSeries(progresionDeEj(modalEj).deload.weight_kg)}
+    />
+  </div>
+)}
+```
+
+Sumar `ChipDeload` al import de `../components/gym`.
+
+- [ ] **Paso 4: verificar a mano**
+
+```bash
+npm run dev
+```
+
+Preparar el caso: cuatro sesiones pasadas del mismo ejercicio, todas a `100 kg`, donde la
+más antigua tiene el mejor 1RM (por ejemplo `100×9`, y las tres siguientes `100×7`).
+
+1. Abrir hoy ese ejercicio en el modal → aparece el chip amarillo
+   **`⬇ Probar deload: 90 kg [aplicar]`**.
+2. Tocar **aplicar** → todas las series del formulario pasan a `90`, y las reps quedan
+   como estaban.
+3. Cancelar el modal sin guardar y reabrirlo → los pesos vuelven a los originales
+   (`aplicar` no guardó nada).
+4. Ejercicio sin estancamiento → **no** aparece el chip de deload.
+5. Preparar el caso de deload en curso: que la última sesión pasada haya sido a `90 kg` y
+   la anterior a `100 kg`, sin PR nuevo → sigue apareciendo el chip rojo de estancamiento
+   pero **no** el de deload.
+6. Ejercicio nuevo (modal abierto con "nuevo") → sin chip, sin romperse.
+
+- [ ] **Paso 5: lint, tests y commit**
+
+```bash
+npm run lint && npm test
+git add src/components/gym.jsx src/pages/Gimnasio.jsx
+git commit -m "feat: chip de deload con aplicacion al formulario de series"
+```
+
+---
+
+## Tarea 8 — La plantilla siembra el peso sugerido
 
 **Archivos:**
 - Modificar: `src/pages/Gimnasio.jsx`
 
-`cargarPlantilla()` inserta ejercicios desde `routine_templates`. Sin este cambio, los
-ejercicios sembrados desde plantilla quedarían sin ninguna serie.
+**Interfaces:**
+- Consume: `progresiones` y `normalizarNombre`, ya disponibles desde la tarea 6.
 
-- [ ] **Paso 1: reescribir `cargarPlantilla`**
+Hoy `cargarPlantilla()` siembra siempre `default_weight_kg` / `default_reps` de
+`routine_templates` (líneas 149-162). Pasa a sembrar lo sugerido cuando hay sugerencia con
+peso, y a caer en los defaults cuando no la hay. La cantidad de series la sigue definiendo
+`default_sets`: el motor no la toca. `routine_templates` **no se actualiza** — describe un
+plan, no un registro.
 
-Reemplazar el cuerpo de `cargarPlantilla()` (`src/pages/Gimnasio.jsx:77-86`) desde el
-`if (ejercicios.length > 0) await supabase...` hasta antes de `await cargarHoy()`:
+- [ ] **Paso 1: cambiar el armado de filas**
+
+En `cargarPlantilla()`, reemplazar el bloque que arma `filas`:
 
 ```js
-if (ejercicios.length > 0) await supabase.from('gym_exercises').delete().eq('log_id', sesionHoy.id)
-
-const { data: creados } = await supabase
-  .from('gym_exercises')
-  .insert(plantilla.map(p => ({
-    log_id: sesionHoy.id,
-    exercise_name: p.exercise_name,
-    notes: '',
-  })))
-  .select()
-
-// default_sets de la plantilla define cuántas series se siembran.
+// default_sets de la plantilla define cuántas series se siembran; el peso y las
+// reps salen del motor de progresión cuando hay sugerencia. Con accion 'sin_rir'
+// el weight_kg viene en null, así que cae en los defaults de la plantilla.
 const filas = []
 creados?.forEach((ej, i) => {
   const p = plantilla[i]
+  const sugerencia = progresiones[normalizarNombre(p.exercise_name)]?.sugerencia
+  const usarSugerencia = sugerencia?.weight_kg != null
   const cantidad = Math.max(p.default_sets || 1, 1)
   for (let n = 1; n <= cantidad; n++) {
     filas.push({
       exercise_id: ej.id,
       set_number: n,
-      weight_kg: p.default_weight_kg ?? null,
-      reps: p.default_reps ?? null,
+      weight_kg: usarSugerencia ? sugerencia.weight_kg : (p.default_weight_kg ?? null),
+      reps: usarSugerencia ? sugerencia.reps : (p.default_reps ?? null),
       rir: null,
     })
   }
 })
-if (filas.length) await supabase.from('gym_sets').insert(filas)
 ```
-
-> El borrado de `gym_exercises` arrastra sus series por el `ON DELETE CASCADE`, así que
-> no hace falta borrar `gym_sets` a mano.
 
 - [ ] **Paso 2: verificar a mano**
 
@@ -745,463 +1174,97 @@ if (filas.length) await supabase.from('gym_sets').insert(filas)
 npm run dev
 ```
 
-1. En Gimnasio → Hoy, elegir un tipo de rutina que tenga plantilla cargada.
-2. Tocar "Plantilla".
-3. Abrir un ejercicio sembrado: debe tener tantas series como `default_sets`, todas con
-   el peso y las reps por defecto.
-4. Volver a tocar "Plantilla" y aceptar el reemplazo: no deben quedar series huérfanas
-   (verificar en Supabase con `SELECT COUNT(*) FROM gym_sets gs WHERE NOT EXISTS
-   (SELECT 1 FROM gym_exercises e WHERE e.id = gs.exercise_id);` → debe dar `0`).
+1. Tener una plantilla cargada para un tipo de rutina, con `default_weight_kg = 60`.
+2. Crear una sesión pasada de uno de esos ejercicios con `80×8 RIR 3` (sugerencia:
+   `82.5 × 8`).
+3. En la sesión de hoy, tocar **Plantilla**. Abrir ese ejercicio: sus series están en
+   **`82.5 kg × 8`**, no en `60`.
+4. Abrir otro ejercicio de la misma plantilla que **no** tenga historial: sus series están
+   en los defaults de la plantilla (`60 kg`).
+5. Un ejercicio cuyo historial no tenga RIR cargado → también cae en los defaults de la
+   plantilla.
+6. Confirmar que la cantidad de series sigue siendo `default_sets` en todos los casos.
+7. Confirmar en Supabase que `routine_templates` **no cambió**:
+   `SELECT exercise_name, default_weight_kg FROM routine_templates;` → los mismos valores
+   de antes.
 
 - [ ] **Paso 3: lint, tests y commit**
 
 ```bash
 npm run lint && npm test
 git add src/pages/Gimnasio.jsx
-git commit -m "feat: la plantilla de rutina siembra las series del ejercicio"
+git commit -m "feat: la plantilla siembra el peso y las reps sugeridas"
 ```
 
 ---
 
-## Tarea 7 — Mostrar resumen de series y 1RM estimado
+## Tarea 9 — Documentación y cierre
 
 **Archivos:**
-- Modificar: `src/pages/Gimnasio.jsx`
-
-**Consume:** `mejorSerie` y `estimar1RM` de las tareas 1-2.
-
-- [ ] **Paso 1: importar el servicio**
-
-En el bloque de imports de `src/pages/Gimnasio.jsx`:
-
-```js
-import { mejorSerie } from '../services/oneRepMax'
-```
-
-- [ ] **Paso 2: agregar el helper de resumen**
-
-A nivel de módulo, abajo del componente junto a `Pill`:
-
-```js
-// "4 series · mejor 85 × 5" — null si el ejercicio no tiene series cargadas.
-function resumenSeries(series) {
-  if (!series?.length) return null
-  const mejor = mejorSerie(series)
-  const cantidad = `${series.length} serie${series.length !== 1 ? 's' : ''}`
-  if (!mejor) return cantidad
-  const { weight_kg, reps } = mejor.serie
-  return `${cantidad} · mejor ${weight_kg} × ${reps}`
-}
-```
-
-- [ ] **Paso 3: mostrarlo en la vista mobile**
-
-En la tarjeta de ejercicio de mobile (`src/pages/Gimnasio.jsx:204-209`), reemplazar la
-fila de `Pill` por:
-
-```jsx
-<div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-  <span style={{ fontSize: '13px', color: C.textSecondary }}>{resumenSeries(ej.gym_sets)}</span>
-  {mejorSerie(ej.gym_sets || []) && (
-    <Pill label="1RM est." value={`${Math.round(mejorSerie(ej.gym_sets).unaRM)} kg`} accent />
-  )}
-</div>
-```
-
-- [ ] **Paso 4: mostrarlo en la tabla de desktop**
-
-En la tabla (`src/pages/Gimnasio.jsx:216-243`), cambiar los encabezados a
-`['Ejercicio', 'Series', '1RM est.', 'Notas', '']` y reemplazar las celdas de
-`Series / Reps / Kg / RIR` por dos:
-
-```jsx
-<td style={{ padding: '12px 14px', color: C.textSecondary }}>{resumenSeries(ej.gym_sets) || '—'}</td>
-<td style={{ padding: '12px 14px', color: C.accentText, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-  {mejorSerie(ej.gym_sets || []) ? `${Math.round(mejorSerie(ej.gym_sets).unaRM)} kg` : '—'}
-</td>
-```
-
-- [ ] **Paso 5: arreglar los chips del historial**
-
-Los chips de la vista Historial (`src/pages/Gimnasio.jsx:284`) leen `ej.weight_kg`, una
-columna que la tarea 10 elimina. Hoy funciona, pero se rompería en silencio (mostraría solo
-el nombre). Reemplazar por el peso de la mejor serie:
-
-```jsx
-{s.gym_exercises.map(ej => {
-  const mejor = mejorSerie(ej.gym_sets || [])
-  return (
-    <span key={ej.id} style={{ fontSize: '12px', background: C.surfaceHigh, color: C.textSecondary, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` }}>
-      {ej.exercise_name}{mejor ? ` · ${mejor.serie.weight_kg}kg` : ''}
-    </span>
-  )
-})}
-```
-
-- [ ] **Paso 6: verificar a mano**
-
-```bash
-npm run dev
-```
-
-1. Ejercicio con series `80×8`, `85×6`, `85×5` → el resumen dice `3 series · mejor 85 × 6`
-   (85×6 = 102 estimado, mayor que 80×8 = 101,3) y el 1RM muestra `102 kg`.
-2. Ejercicio de futsal o cardio, sin peso → resumen con la cantidad de series y 1RM en `—`,
-   sin romperse.
-3. Ejercicio sin ninguna serie → celdas en `—`.
-4. Achicar la ventana por debajo de 640px y confirmar que la vista mobile muestra lo mismo.
-5. Ir a la pestaña Historial: los chips siguen mostrando `nombre · Nkg` con el peso de la
-   mejor serie, y los ejercicios sin peso muestran solo el nombre.
-
-- [ ] **Paso 7: lint, tests y commit**
-
-```bash
-npm run lint && npm test
-git add src/pages/Gimnasio.jsx
-git commit -m "feat: resumen de series y 1RM estimado en la lista de ejercicios"
-```
-
----
-
-## Tarea 8 — Detección y badge de PR
-
-**Archivos:**
-- Modificar: `src/pages/Gimnasio.jsx`
-- Modificar: `src/components/icons.jsx`
-
-**Consume:** `mejorSerie`, `detectarPR` y `normalizarNombre` de las tareas 1-3.
-
-- [ ] **Paso 1: agregar el ícono de trofeo**
-
-Al final de `src/components/icons.jsx`, siguiendo el lenguaje del resto (viewBox 24×24,
-stroke 2, round caps):
-
-```jsx
-export function IconTrophy(p) {
-  return <Svg {...p}><path d="M7 4h10v5a5 5 0 0 1-10 0V4z" /><path d="M7 6H4v2a3 3 0 0 0 3 3" /><path d="M17 6h3v2a3 3 0 0 1-3 3" /><line x1="12" y1="14" x2="12" y2="18" /><path d="M8 21h8" /><path d="M10 18h4v3h-4z" /></Svg>
-}
-```
-
-- [ ] **Paso 2: importar lo necesario en Gimnasio**
-
-```js
-import { mejorSerie, detectarPR, normalizarNombre } from '../services/oneRepMax'
-import { IconPlan, IconTrash, IconGym, IconCheck, IconClose, IconTrophy } from '../components/icons'
-```
-
-- [ ] **Paso 3: agregar el estado y la carga del histórico**
-
-Junto a los demás `useState` del componente:
-
-```js
-const [historicoPR, setHistoricoPR] = useState({})
-```
-
-Y una función nueva, llamada desde el `useEffect` inicial:
-
-```js
-// Mejor 1RM histórico por ejercicio (nombre normalizado → { serie, unaRM }),
-// excluyendo la sesión de hoy: si no, el récord de hoy se compararía consigo mismo.
-async function cargarHistoricoPR() {
-  const { data } = await supabase
-    .from('gym_exercises')
-    .select('exercise_name, gym_sets(weight_kg, reps), gym_logs!inner(user_id, date)')
-    .eq('gym_logs.user_id', session.user.id)
-    .neq('gym_logs.date', hoy)
-
-  const mapa = {}
-  for (const ej of data || []) {
-    const clave = normalizarNombre(ej.exercise_name)
-    const mejor = mejorSerie(ej.gym_sets || [])
-    if (!mejor) continue
-    if (!mapa[clave] || mejor.unaRM > mapa[clave].unaRM) mapa[clave] = mejor
-  }
-  setHistoricoPR(mapa)
-}
-```
-
-Actualizar el `useEffect` (`src/pages/Gimnasio.jsx:47`):
-
-```js
-useEffect(() => { cargarHoy(); cargarHistorial(); cargarHistoricoPR() }, [])
-```
-
-Y llamarla también al final de `guardarEjercicio()` y de `cargarPlantilla()`, después de
-`cargarHoy()`, para que el histórico refleje los cambios.
-
-> Trae todos los ejercicios pasados del usuario y agrega en el cliente, porque la
-> normalización de nombres vive en JS y la base no la conoce. Para el volumen de una app
-> personal es una query acotada; si el historial creciera mucho, se acota por fecha.
-
-- [ ] **Paso 4: agregar el badge**
-
-A nivel de módulo, junto a `Pill`:
-
-```js
-function BadgePR({ mejora }) {
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: '4px',
-      fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px',
-      background: C.yellowDim, color: C.yellow, border: `1px solid ${C.yellow}40`,
-    }}>
-      <IconTrophy size={11} color={C.yellow} />
-      PR +{mejora.toFixed(1)} kg
-    </span>
-  )
-}
-```
-
-- [ ] **Paso 5: mostrarlo junto al nombre del ejercicio**
-
-Agregar un helper dentro del componente:
-
-```js
-function prDe(ej) {
-  return detectarPR(mejorSerie(ej.gym_sets || []), historicoPR[normalizarNombre(ej.exercise_name)])
-}
-```
-
-En mobile (`src/pages/Gimnasio.jsx:198`), envolver el nombre:
-
-```jsx
-<div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-  <span style={{ fontWeight: 600, fontSize: '14px', color: C.textPrimary }}>{ej.exercise_name}</span>
-  {prDe(ej).esPR && <BadgePR mejora={prDe(ej).mejora} />}
-</div>
-```
-
-En la celda de nombre de la tabla desktop, aplicar el mismo bloque.
-
-- [ ] **Paso 6: verificar a mano**
-
-```bash
-npm run dev
-```
-
-1. Cargar en una fecha pasada (editando `date` en Supabase) un ejercicio "Press banca" con
-   `80 × 8`. En la sesión de hoy cargar "Press banca" con `85 × 6` → aparece el badge PR.
-2. Cargar hoy `70 × 5` en ese mismo ejercicio → **no** aparece badge.
-3. Cargar un ejercicio que nunca hiciste antes → **no** aparece badge (la primera vez no
-   es récord).
-4. Cargar exactamente el mismo peso y reps que el histórico → **no** aparece badge.
-5. Escribir el ejercicio como `"  press   BANCA "` → igual detecta el histórico y muestra
-   el badge (normalización de nombre).
-
-- [ ] **Paso 7: lint, tests y commit**
-
-```bash
-npm run lint && npm test
-git add src/pages/Gimnasio.jsx src/components/icons.jsx
-git commit -m "feat: badge de record personal por 1RM estimado"
-```
-
----
-
-## Tarea 9 — Adaptar el gráfico de evolución del Dashboard
-
-**Archivos:**
-- Modificar: `src/pages/Dashboard.jsx`
-
-**Consume:** `mejorSerie` de la tarea 2.
-
-`cargarEvolucion()` alimenta el gráfico de progresión de carga leyendo `ej.weight_kg`,
-`ej.sets` y `ej.reps` — las tres columnas que elimina la tarea 10. Sin este cambio el
-gráfico quedaría vacío después de la migración destructiva.
-
-- [ ] **Paso 1: importar el servicio**
-
-En los imports de `src/pages/Dashboard.jsx`:
-
-```js
-import { mejorSerie } from '../services/oneRepMax'
-```
-
-- [ ] **Paso 2: reescribir `cargarEvolucion`**
-
-Reemplazar el cuerpo desde la query hasta el `setEvolucionCargas`
-(`src/pages/Dashboard.jsx:241-247`):
-
-```js
-const { data: ejs } = await supabase
-  .from('gym_exercises')
-  .select('log_id, gym_sets(weight_kg, reps)')
-  .in('log_id', logIds)
-  .eq('exercise_name', ejercicioSeleccionado)
-if (!ejs?.length) { setEvolucionCargas([]); return }
-
-const evolucion = ejs.map(ej => {
-  const sesion = gymLogs.find(l => l.id === ej.log_id)
-  const mejor = mejorSerie(ej.gym_sets || [])
-  return {
-    fecha: new Date(sesion.date + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }),
-    kg: mejor ? mejor.serie.weight_kg : 0,
-    series: ej.gym_sets?.length || 0,
-    reps: mejor ? mejor.serie.reps : 0,
-  }
-}).filter(e => e.kg > 0)
-setEvolucionCargas(evolucion)
-```
-
-> El gráfico ahora traza la **mejor serie** de cada sesión en vez del valor único que
-> había antes. Es la lectura correcta para progresión de carga. Agregar una línea de 1RM
-> estimado al gráfico queda **fuera de alcance** de este spec: esta tarea solo mantiene
-> el comportamiento actual funcionando sobre el esquema nuevo.
-
-- [ ] **Paso 3: verificar a mano**
-
-```bash
-npm run dev
-```
-
-1. En el Dashboard, ir al selector de ejercicio y elegir uno con historial.
-2. El gráfico dibuja los mismos puntos que antes del cambio (una sesión = un punto).
-3. Elegir un ejercicio sin peso (futsal, cardio): el gráfico queda vacío, sin romperse.
-
-- [ ] **Paso 4: lint, tests y commit**
-
-```bash
-npm run lint && npm test
-git add src/pages/Dashboard.jsx
-git commit -m "fix: grafico de evolucion lee la mejor serie de gym_sets"
-```
-
----
-
-## Tarea 10 — Migración destructiva: limpiar las columnas viejas
-
-**Archivos:**
-- Crear: `supabase/migrations/20260827120000_drop_gym_exercises_legacy_cols.sql`
-
-Solo después de que las tareas 5-9 estén deployadas y verificadas en uso real. Ninguna
-parte del código debe leer ya `sets`, `reps`, `weight_kg` ni `rir` de `gym_exercises`:
-confirmarlo con `git grep -n "ej\.weight_kg\|ej\.sets\|ej\.reps" src/` → sin resultados.
-
-- [ ] **Paso 1: re-correr el backfill idempotente**
-
-En el editor SQL de Supabase, volver a correr el bloque `INSERT INTO gym_sets ...` de la
-tarea 4. Levanta cualquier ejercicio cargado entre aquella migración y el deploy de la UI
-nueva. Verificar cuántas filas insertó: idealmente `0`.
-
-- [ ] **Paso 2: confirmar que no quedan ejercicios sin series**
-
-```sql
-SELECT COUNT(*) FROM gym_exercises e
-WHERE NOT EXISTS (SELECT 1 FROM gym_sets gs WHERE gs.exercise_id = e.id);
-```
-
-Esperado: `0`. Si da distinto de `0`, **frenar** y revisar antes de seguir.
-
-- [ ] **Paso 3: backup**
-
-Confirmar backup reciente en Supabase → Database → Backups. Este paso sí borra datos.
-
-- [ ] **Paso 4: escribir y correr la migración**
-
-Crear `supabase/migrations/20260827120000_drop_gym_exercises_legacy_cols.sql`:
-
-```sql
--- Elimina las columnas escalares de gym_exercises, reemplazadas por gym_sets.
--- Correr SOLO después de verificar que todo ejercicio tiene sus series
--- (ver ROADMAP.md, tarea 10, paso 2). gym_exercises queda como
--- (id, log_id, exercise_name, notes).
-
-ALTER TABLE gym_exercises
-  DROP COLUMN IF EXISTS sets,
-  DROP COLUMN IF EXISTS reps,
-  DROP COLUMN IF EXISTS weight_kg,
-  DROP COLUMN IF EXISTS rir;
-```
-
-- [ ] **Paso 5: verificar el esquema resultante**
-
-```sql
-SELECT column_name FROM information_schema.columns
-WHERE table_name = 'gym_exercises' ORDER BY ordinal_position;
-```
-
-Esperado: solo `id`, `log_id`, `exercise_name`, `notes` (más las de sistema que hubiera).
-
-- [ ] **Paso 6: verificar que la app sigue andando**
-
-```bash
-npm run dev
-```
-
-Recorrer Gimnasio → Hoy e Historial, crear un ejercicio nuevo con series, cargar una
-plantilla. Nada debe romperse: ningún código lee ya esas columnas.
-
-- [ ] **Paso 7: commit**
-
-```bash
-git add supabase/migrations/20260827120000_drop_gym_exercises_legacy_cols.sql
-git commit -m "refactor(db): eliminar columnas escalares de gym_exercises"
-```
-
----
-
-## Tarea 11 — Documentación y cierre
-
-**Archivos:**
+- Modificar: `DECISIONS.md`
 - Modificar: `CLAUDE.md`
 - Modificar: `README.md`
-- Crear: `DECISIONS.md`
 
-- [ ] **Paso 1: actualizar `CLAUDE.md`**
+- [ ] **Paso 1: agregar la sección del Spec 2 a `DECISIONS.md`**
 
-En la tabla de tablas de Supabase, corregir la fila de `gym_exercises` (ya no tiene
-`sets`, `reps`, `weight_kg`, `rir`) y agregar la fila de `gym_sets`:
+Agregar al final de `DECISIONS.md`:
 
 ```markdown
-| `gym_exercises` | Ejercicios por sesion | `id`, `log_id`, `exercise_name`, `notes` |
-| `gym_sets` | Series por ejercicio | `id`, `exercise_id`, `set_number`, `weight_kg`, `reps`, `rir` |
+## Spec 2 — Motor de progresión (2026-08-26)
+
+- **Doble progresión por RIR** sobre progresión lineal, por rango de reps o por % de 1RM:
+  aprovecha un dato que ya se registra en `gym_sets`, es el estándar en hipertrofia y no
+  necesita schema nuevo. El rango de reps habría requerido agregar columnas a
+  `routine_templates`; el % de 1RM arrastra el error de Epley a la prescripción.
+- **RIR mínimo de la sesión, no el de la última serie.** Con series `RIR 0, 2, 3` el mínimo
+  manda mantener y la última mandaría subir. Al prescribir carga, equivocarse hacia abajo
+  cuesta mucho menos que hacia arriba.
+- **RIR 0 mantiene el peso, no lo baja.** Llegar al fallo es una sesión dura, no un
+  estancamiento. Bajar carga entra por una sola vía, el deload, y siempre con confirmación.
+- **Incremento fijo de 2.5 kg**, sin configuración por ejercicio: es el disco chico estándar
+  y el salto sostenible sesión a sesión. Una columna `incremento_kg` en `routine_templates`
+  habría sumado migración y UI para un caso que se resuelve editando el número a mano.
+- **Estancamiento = 3 sesiones desde el récord.** Una sola definición, testeable. Un empate
+  no resetea el contador: se toma la primera sesión que alcanzó el máximo, coherente con la
+  decisión del Spec 1 de que empatar no es PR.
+- **El deload se ofrece pero nunca se siembra solo**, y no se re-ofrece si la última sesión
+  ya bajó el peso. Sin eso el chip reaparecería hasta lograr un PR nuevo y se volvería ruido.
+- **El deload se calcula sobre `pesoMaximo`, no sobre la mejor serie por 1RM**: se razona en
+  kilos sobre la barra, no en 1RM estimado. El redondeo va hacia abajo para que el alivio
+  sea real.
+- **`progresion.js` separado de `oneRepMax.js`**: aritmética de 1RM y reglas de entrenamiento
+  son dos responsabilidades con motivos de cambio distintos.
+- **Spec 2 sin cambios de schema.** Una sola query alimenta PR, sugerencia y estancamiento.
+
+### Decisiones surgidas al escribir el roadmap
+
+- **"Serie efectiva" también exige `reps`.** El spec la definía como `weight_kg > 0` y `rir`
+  no nulo, pero la sugerencia se expresa como peso × reps: sin `reps` no hay nada que
+  sugerir. Una serie con peso y RIR pero sin reps se trata como no efectiva.
+- **`accion: 'sin_rir'` en vez de `null`.** El spec pedía "sin sugerencia" para los tres
+  casos sin datos, pero la UI necesita distinguir "no puedo sugerir" (ejercicio nuevo, sin
+  peso) de "me falta el dato que vos podés cargar". `sin_rir` viaja con `weight_kg: null`,
+  así que `cargarPlantilla()` igual cae en los defaults.
 ```
 
-En "Comandos esenciales", agregar:
+- [ ] **Paso 2: actualizar `CLAUDE.md`**
 
-```markdown
-npm test             # Suite de tests (Vitest) — correr antes de cada commit
+En "Estructura de archivos clave", agregar bajo `services/`:
+
+```
+    progresion.js        # Motor de progresión: sugerencia de peso, estancamiento, deload
 ```
 
-- [ ] **Paso 2: actualizar `README.md`**
+Y bajo `src/`, dentro de `components/`:
 
-Agregar `gym_sets` a la tabla de base de datos y sumar a la lista de features:
-1RM estimado por ejercicio y detección de récords personales.
-
-- [ ] **Paso 3: crear `DECISIONS.md`**
-
-```markdown
-# Decisiones
-
-Registro de ambigüedades resueltas durante la implementación.
-Ver `vibecoding-estructurado.md` (vault) para el flujo.
-
-## Spec 1 — Series, 1RM y PR (2026-08-25)
-
-- **Fórmula Epley** (`peso × (1 + reps/30)`) sobre Brzycki o Lombardi: es la de uso
-  más extendido y coincide exactamente en reps = 1. Vive en una sola función, así que
-  cambiarla es una línea más sus tests.
-- **Tope de 15 repeticiones, no 12.** Por encima de ~12 reps Epley sobreestima, pero
-  cortar en 12 dejaría sesiones enteras sin 1RM ni posibilidad de PR. Un 1RM derivado
-  de 13-15 reps se lee como orientativo: sirve para comparar la propia progresión, no
-  contra tablas externas.
-- **PR definido por 1RM estimado**, no por peso máximo levantado: engloba tanto subir
-  el peso como hacer más reps con el mismo peso. Con "peso máximo", pasar de 85×3 a
-  85×5 no contaría como progreso, cuando claramente lo es.
-- **`is_warmup` excluido del modelo.** openGym lo tiene, pero la mejor serie se define
-  por mayor 1RM y una serie de calentamiento es más liviana: nunca gana. Sería
-  complejidad sin efecto.
-- **Migración partida en dos scripts SQL** con verificación manual entre medio, porque
-  hay una sola base y no hay ambiente de desarrollo separado. El backfill es idempotente
-  para poder re-correrlo antes del paso destructivo.
-- **Tests solo sobre lógica pura**, no sobre componentes React ni queries a Supabase:
-  requerirían mocks pesados y la lógica de UI está acoplada a estilos inline, lo que
-  haría esos tests caros de mantener sin cubrir la parte riesgosa.
-- **Empate en `mejorSerie` se resuelve por la primera serie.** Arbitrario pero
-  determinista; ninguna de las dos es "más" récord que la otra.
-- **RIR 0 se distingue de RIR vacío.** El código anterior usaba `Number(x) || null`,
-  que convertía un RIR 0 (fallo muscular) en `null`. Se compara contra `''`.
 ```
+    gym.jsx              # Componentes de presentación de la pantalla de Gimnasio
+```
+
+- [ ] **Paso 3: actualizar `README.md`**
+
+Sumar a la lista de features: sugerencia automática de peso por doble progresión de RIR,
+detección de estancamiento y deload.
 
 - [ ] **Paso 4: verificación final**
 
@@ -1209,26 +1272,26 @@ Ver `vibecoding-estructurado.md` (vault) para el flujo.
 npm test && npm run lint && npm run build
 ```
 
-Esperado: 21 tests en verde, sin errores de lint, build exitoso.
+Esperado: 55 tests en verde, sin errores de lint, build exitoso.
 
 - [ ] **Paso 5: commit**
 
 ```bash
-git add CLAUDE.md README.md DECISIONS.md
-git commit -m "docs: documentar gym_sets, 1RM y decisiones del spec 1"
+git add DECISIONS.md CLAUDE.md README.md
+git commit -m "docs: documentar el motor de progresion y sus decisiones"
 ```
 
 ---
 
 ## Cierre
 
-Con las 11 tareas completas:
+Con las 9 tareas completas:
 
 - [ ] Correr la suite entera: `npm test`
-- [ ] Revisar `DECISIONS.md` completo
-- [ ] Leer el diff de las tareas 5 y 8, que son las más grandes y riesgosas
+- [ ] Revisar la sección del Spec 2 en `DECISIONS.md`
+- [ ] Leer el diff de las tareas 6 y 7, que son las que más tocan la UI
 - [ ] `npm run build && npx cap sync android` si se va a compilar el APK
 - [ ] `git push origin main` — dispara Vercel y el build del APK
 
-**Después de esto:** Spec 2 (motor de progresión automática), que consume `estimar1RM`
-y `mejorSerie` ya construidos.
+**Después de esto:** Spec 3 (heatmap anual de actividad y muscle mapping), que es
+independiente de este.

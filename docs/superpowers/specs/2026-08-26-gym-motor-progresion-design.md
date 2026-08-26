@@ -27,9 +27,9 @@ Al de Spec 1 (PR, 1RM, RIR) se agregan:
   sube el peso.
 - **Deload**: sesión deliberadamente más liviana, usada para romper un estancamiento
   bajando la carga y volviendo a subir.
-- **Serie efectiva**: para este spec, una serie con `weight_kg > 0` y `rir` no nulo. Son
-  las únicas que el motor considera, porque son las únicas que informan sobre el
-  esfuerzo real.
+- **Serie efectiva**: para este spec, una serie con `weight_kg > 0`, `reps` y `rir`. Son
+  las únicas que el motor considera: la sugerencia se decide por RIR y se expresa como
+  peso × reps, así que sin las tres no hay nada que sugerir.
 
 ---
 
@@ -62,8 +62,8 @@ Al de Spec 1 (PR, 1RM, RIR) se agregan:
 `gym_logs.date`, que ya existen.
 
 `cargarHistoricoPR()` en `Gimnasio.jsx` ya trae el histórico completo del usuario con sus
-series. Se le agrega `gym_logs.date` al `select` y esa **única query alimenta las tres
-derivaciones**:
+series y con `gym_logs.date`. El único agregado al `select` es `rir`, y esa **única query
+alimenta las tres derivaciones**:
 
 | Derivación | Qué necesita del histórico |
 |---|---|
@@ -115,7 +115,10 @@ En estos casos el motor no sugiere nada y `cargarPlantilla()` siembra los defaul
 
 El último caso es el único que se comunica explícitamente en la UI (*"cargá el RIR para
 recibir sugerencias"*). Sin ese texto el motor callaría sin que se entienda por qué, y el
-dato que falta es justamente el que el usuario puede aportar.
+dato que falta es justamente el que el usuario puede aportar. Por eso ese caso devuelve
+`accion: 'sin_rir'` con `weight_kg: null` en vez de `null` a secas: la UI necesita
+distinguir "no puedo sugerir" de "me falta un dato que vos podés cargar", y el
+`weight_kg: null` hace que la siembra igual caiga en los defaults de la plantilla.
 
 ### Estancamiento
 
