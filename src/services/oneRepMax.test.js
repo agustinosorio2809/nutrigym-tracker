@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { estimar1RM, MAX_REPS_ESTIMABLE } from './oneRepMax'
+import { estimar1RM, MAX_REPS_ESTIMABLE, mejorSerie } from './oneRepMax'
 
 describe('estimar1RM', () => {
   it('con 1 repetición devuelve el peso exacto', () => {
@@ -29,5 +29,43 @@ describe('estimar1RM', () => {
 
   it('devuelve null sin repeticiones', () => {
     expect(estimar1RM({ weight_kg: 80, reps: null })).toBeNull()
+  })
+})
+
+describe('mejorSerie', () => {
+  it('elige por 1RM estimado, no por peso crudo', () => {
+    const series = [
+      { weight_kg: 90, reps: 1 },   // 1RM = 90
+      { weight_kg: 80, reps: 8 },   // 1RM = 101.3 ← gana pese a pesar menos
+    ]
+    expect(mejorSerie(series).serie).toBe(series[1])
+  })
+
+  it('devuelve null con lista vacía', () => {
+    expect(mejorSerie([])).toBeNull()
+  })
+
+  it('devuelve null si ninguna serie es estimable', () => {
+    expect(mejorSerie([{ weight_kg: null, reps: 10 }])).toBeNull()
+  })
+
+  it('ignora las series no estimables y usa el resto', () => {
+    const series = [
+      { weight_kg: null, reps: 10 },
+      { weight_kg: 60, reps: 5 },
+    ]
+    expect(mejorSerie(series).serie).toBe(series[1])
+  })
+
+  it('ante un empate se queda con la primera', () => {
+    const series = [
+      { weight_kg: 80, reps: 5 },
+      { weight_kg: 80, reps: 5 },
+    ]
+    expect(mejorSerie(series).serie).toBe(series[0])
+  })
+
+  it('devuelve null si no recibe un array', () => {
+    expect(mejorSerie(undefined)).toBeNull()
   })
 })

@@ -18,3 +18,16 @@ export function estimar1RM({ weight_kg, reps } = {}) {
   if (r === 1) return peso
   return peso * (1 + r / 30)
 }
+
+// La serie de mayor 1RM estimado. Ante empate se queda con la primera.
+// Devuelve null si ninguna serie es estimable.
+export function mejorSerie(series) {
+  if (!Array.isArray(series)) return null
+  let mejor = null
+  for (const serie of series) {
+    const unaRM = estimar1RM(serie)
+    if (unaRM === null) continue
+    if (mejor === null || unaRM > mejor.unaRM) mejor = { serie, unaRM }
+  }
+  return mejor
+}
