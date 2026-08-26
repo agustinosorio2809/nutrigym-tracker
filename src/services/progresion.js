@@ -5,8 +5,6 @@
 
 import { mejorSerie } from './oneRepMax'
 
-// Agrupa las filas de un mismo ejercicio por sesión (fecha) y calcula la mejor
-// serie de cada una. Devuelve de la más reciente a la más antigua.
 // Las fechas vienen como 'YYYY-MM-DD', así que el orden lexicográfico es el
 // orden cronológico.
 export function sesionesDeEjercicio(filas) {
