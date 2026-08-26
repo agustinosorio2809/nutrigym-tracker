@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import ExcelJS from 'exceljs'
 import { Link } from 'react-router-dom'
-import { mejorSerie } from '../services/oneRepMax'
+import { mejorSerie, pesoMaximo } from '../services/oneRepMax'
 import { C, ESTADO_COLORS } from '../theme'
 import { IconSunrise, IconSun, IconApple, IconMoon, IconGym, IconPlan, IconWarning, IconDownload, IconMeal } from '../components/icons'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
@@ -247,12 +247,18 @@ export default function Dashboard({ session }) {
     if (!ejs?.length) { setEvolucionCargas([]); return }
     const evolucion = ejs.map(ej => {
       const sesion = gymLogs.find(l => l.id === ej.log_id)
-      const mejor = mejorSerie(ej.gym_sets || [])
+      const gymSets = ej.gym_sets || []
+      // kg es "cuánto pesé", no 1RM: usamos pesoMaximo para no perder sesiones
+      // con series no estimables (reps null o > MAX_REPS_ESTIMABLE).
+      const kg = pesoMaximo(gymSets)
+      const mejor = mejorSerie(gymSets)
+      // Reps de la serie de mayor 1RM si hay una; si no, de la serie con el peso máximo.
+      const serieRef = mejor ? mejor.serie : gymSets.find(s => Number(s.weight_kg) === kg)
       return {
         fecha: new Date(sesion.date + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }),
-        kg: mejor ? mejor.serie.weight_kg : 0,
-        series: ej.gym_sets?.length || 0,
-        reps: mejor ? mejor.serie.reps : 0,
+        kg: kg || 0,
+        series: gymSets.length,
+        reps: serieRef ? serieRef.reps : 0,
       }
     }).filter(e => e.kg > 0)
     setEvolucionCargas(evolucion)

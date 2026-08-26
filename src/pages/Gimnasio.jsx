@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { C } from '../theme'
 import { IconPlan, IconTrash, IconGym, IconCheck, IconClose, IconTrophy } from '../components/icons'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
-import { mejorSerie, detectarPR, normalizarNombre } from '../services/oneRepMax'
+import { mejorSerie, pesoMaximo, detectarPR, normalizarNombre } from '../services/oneRepMax'
 
 const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
 const SERIE_VACIA = { weight_kg: '', reps: '', rir: '' }
@@ -135,7 +135,7 @@ export default function Gimnasio({ session }) {
     // El borrado de gym_exercises arrastra sus series por el ON DELETE CASCADE.
     if (ejercicios.length > 0) await supabase.from('gym_exercises').delete().eq('log_id', sesionHoy.id)
 
-    const { data: creados } = await supabase
+    const { data: creados, error: errorCreados } = await supabase
       .from('gym_exercises')
       .insert(plantilla.map(p => ({
         log_id: sesionHoy.id,
@@ -143,6 +143,7 @@ export default function Gimnasio({ session }) {
         notes: '',
       })))
       .select()
+    if (errorCreados) { alert('No se pudo cargar la plantilla. Reintentá.'); setCargandoPlantilla(false); return }
 
     // default_sets de la plantilla define cuántas series se siembran.
     const filas = []
@@ -159,7 +160,10 @@ export default function Gimnasio({ session }) {
         })
       }
     })
-    if (filas.length) await supabase.from('gym_sets').insert(filas)
+    if (filas.length) {
+      const { error: errorSets } = await supabase.from('gym_sets').insert(filas)
+      if (errorSets) { alert('No se pudieron cargar las series de la plantilla. Reintentá.'); setCargandoPlantilla(false); return }
+    }
 
     await cargarHoy(); await cargarHistoricoPR(); setCargandoPlantilla(false)
   }
@@ -177,12 +181,15 @@ export default function Gimnasio({ session }) {
 
     let exerciseId
     if (modalEj === 'nuevo') {
-      const { data } = await supabase.from('gym_exercises').insert(base).select()
+      const { data, error } = await supabase.from('gym_exercises').insert(base).select()
+      if (error) { alert('No se pudo guardar el ejercicio. Reintentá.'); setSaving(false); return }
       exerciseId = data?.[0]?.id
     } else {
       exerciseId = modalEj.id
-      await supabase.from('gym_exercises').update(base).eq('id', exerciseId)
-      await supabase.from('gym_sets').delete().eq('exercise_id', exerciseId)
+      const { error: errorUpdate } = await supabase.from('gym_exercises').update(base).eq('id', exerciseId)
+      if (errorUpdate) { alert('No se pudo guardar el ejercicio. Reintentá.'); setSaving(false); return }
+      const { error: errorDelete } = await supabase.from('gym_sets').delete().eq('exercise_id', exerciseId)
+      if (errorDelete) { alert('No se pudo guardar el ejercicio. Reintentá.'); setSaving(false); return }
     }
 
     const filas = formEj.series.map((s, i) => ({
@@ -194,7 +201,10 @@ export default function Gimnasio({ session }) {
       // `Number(x) || null`, que lo convertiría en null.
       rir: s.rir === '' ? null : Number(s.rir),
     }))
-    if (filas.length) await supabase.from('gym_sets').insert(filas)
+    if (filas.length) {
+      const { error: errorSets } = await supabase.from('gym_sets').insert(filas)
+      if (errorSets) { alert('No se pudo guardar el ejercicio. Reintentá.'); setSaving(false); return }
+    }
 
     await cargarHoy(); await cargarHistorial(); await cargarHistoricoPR(); setSaving(false); setModalEj(null)
   }
@@ -431,10 +441,10 @@ export default function Gimnasio({ session }) {
                   {s.gym_exercises?.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
                       {s.gym_exercises.map(ej => {
-                        const mejor = mejorSerie(ej.gym_sets || [])
+                        const kg = pesoMaximo(ej.gym_sets || [])
                         return (
                           <span key={ej.id} style={{ fontSize: '12px', background: C.surfaceHigh, color: C.textSecondary, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` }}>
-                            {ej.exercise_name}{mejor ? ` · ${mejor.serie.weight_kg}kg` : ''}
+                            {ej.exercise_name}{kg ? ` · ${kg}kg` : ''}
                           </span>
                         )
                       })}

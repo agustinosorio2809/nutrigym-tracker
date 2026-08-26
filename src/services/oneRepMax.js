@@ -32,6 +32,17 @@ export function mejorSerie(series) {
   return mejor
 }
 
+// El peso más alto entre las series, sin importar si son estimables para 1RM
+// (a diferencia de mejorSerie). Se usa donde el objetivo es mostrar "qué tanto
+// pesaste", no comparar 1RM.
+export function pesoMaximo(series) {
+  if (!Array.isArray(series)) return null
+  const pesos = series
+    .map(s => Number(s.weight_kg))
+    .filter(p => Number.isFinite(p) && p > 0)
+  return pesos.length ? Math.max(...pesos) : null
+}
+
 // Los ejercicios se emparejan por nombre porque no hay catálogo. Sin esto,
 // "Press Banca" y "press banca " serían dos ejercicios distintos y se perdería
 // el histórico. No resuelve variantes de tipeo ("Press de banca"): ver la

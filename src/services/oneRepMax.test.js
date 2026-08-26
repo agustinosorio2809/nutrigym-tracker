@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { estimar1RM, MAX_REPS_ESTIMABLE, mejorSerie, normalizarNombre, detectarPR } from './oneRepMax'
+import { estimar1RM, MAX_REPS_ESTIMABLE, mejorSerie, pesoMaximo, normalizarNombre, detectarPR } from './oneRepMax'
 
 describe('estimar1RM', () => {
   it('con 1 repetición devuelve el peso exacto', () => {
@@ -67,6 +67,36 @@ describe('mejorSerie', () => {
 
   it('devuelve null si no recibe un array', () => {
     expect(mejorSerie(undefined)).toBeNull()
+  })
+})
+
+describe('pesoMaximo', () => {
+  it('elige el peso más alto sin importar si la serie es estimable para 1RM', () => {
+    const series = [
+      { weight_kg: 60, reps: 5 },     // estimable
+      { weight_kg: 80, reps: 20 },    // no estimable (supera MAX_REPS_ESTIMABLE), pero pesa más
+    ]
+    expect(pesoMaximo(series)).toBe(80)
+  })
+
+  it('incluye series con reps null en la comparación de peso', () => {
+    const series = [
+      { weight_kg: 100, reps: null },
+      { weight_kg: 60, reps: 5 },
+    ]
+    expect(pesoMaximo(series)).toBe(100)
+  })
+
+  it('devuelve null con lista vacía', () => {
+    expect(pesoMaximo([])).toBeNull()
+  })
+
+  it('devuelve null si ninguna serie tiene peso', () => {
+    expect(pesoMaximo([{ weight_kg: null, reps: 10 }, { weight_kg: 0, reps: 5 }])).toBeNull()
+  })
+
+  it('devuelve null si no recibe un array', () => {
+    expect(pesoMaximo(undefined)).toBeNull()
   })
 })
 

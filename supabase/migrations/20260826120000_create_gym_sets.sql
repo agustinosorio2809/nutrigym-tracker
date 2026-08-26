@@ -72,6 +72,12 @@ CREATE POLICY "gym_sets: delete own"
 -- ejercicios que todavía no tienen series, así se puede volver a correr sin
 -- duplicar — necesario para levantar sesiones cargadas entre esta migración y
 -- el deploy de la UI nueva.
+--
+-- NOTA (post-hoc): "idempotente" y re-corrible valía solo hasta que se aplicara
+-- 20260827120000_drop_gym_exercises_legacy_cols.sql, que borró sets/reps/weight_kg/rir
+-- de gym_exercises. Esa migración ya está aplicada en la base real, así que este
+-- backfill queda como registro histórico: volver a correrlo hoy falla con
+-- "column does not exist" porque depende de columnas que ya no existen.
 
 INSERT INTO gym_sets (exercise_id, set_number, weight_kg, reps, rir)
 SELECT e.id, s.n, e.weight_kg, e.reps, e.rir
