@@ -96,8 +96,35 @@ export default function Gimnasio({ session }) {
     setCargandoPlantilla(true)
     const { data: plantilla } = await supabase.from('routine_templates').select('*').eq('user_id', session.user.id).eq('routine_type', formSesion.routine_type).order('sort_order')
     if (!plantilla?.length) { alert('No hay plantilla para este tipo de rutina.'); setCargandoPlantilla(false); return }
+    // El borrado de gym_exercises arrastra sus series por el ON DELETE CASCADE.
     if (ejercicios.length > 0) await supabase.from('gym_exercises').delete().eq('log_id', sesionHoy.id)
-    await supabase.from('gym_exercises').insert(plantilla.map(p => ({ log_id: sesionHoy.id, exercise_name: p.exercise_name, sets: p.default_sets, reps: p.default_reps, weight_kg: p.default_weight_kg, rir: null, notes: '' })))
+
+    const { data: creados } = await supabase
+      .from('gym_exercises')
+      .insert(plantilla.map(p => ({
+        log_id: sesionHoy.id,
+        exercise_name: p.exercise_name,
+        notes: '',
+      })))
+      .select()
+
+    // default_sets de la plantilla define cuántas series se siembran.
+    const filas = []
+    creados?.forEach((ej, i) => {
+      const p = plantilla[i]
+      const cantidad = Math.max(p.default_sets || 1, 1)
+      for (let n = 1; n <= cantidad; n++) {
+        filas.push({
+          exercise_id: ej.id,
+          set_number: n,
+          weight_kg: p.default_weight_kg ?? null,
+          reps: p.default_reps ?? null,
+          rir: null,
+        })
+      }
+    })
+    if (filas.length) await supabase.from('gym_sets').insert(filas)
+
     await cargarHoy(); setCargandoPlantilla(false)
   }
 
