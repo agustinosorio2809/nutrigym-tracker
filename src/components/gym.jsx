@@ -5,7 +5,7 @@
 
 import { C } from '../theme'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
-import { IconTrophy } from './icons'
+import { IconTrophy, IconWarning, IconTrendingUp } from './icons'
 
 export function TabButton({ active, onClick, children }) {
   const { style, handlers } = useInteractiveStyle(
@@ -92,4 +92,55 @@ export function ModalSecondaryButton({ onClick, children }) {
     { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
   )
   return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+// Base visual compartida con BadgePR: píldora chica, fondo xxxDim, borde al 40%.
+function Chip({ color, dim, borde = true, children }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px',
+      background: dim, color, border: borde ? `1px solid ${color}40` : `1px solid ${C.border}`,
+    }}>
+      {children}
+    </span>
+  )
+}
+
+// La sugerencia siempre viaja con su motivo: un número raro se detecta leyéndolo.
+export function ChipProgresion({ sugerencia }) {
+  if (!sugerencia) return null
+
+  if (sugerencia.accion === 'sin_rir') {
+    return <Chip color={C.textMuted} dim={C.surfaceHigh} borde={false}>{sugerencia.motivo}</Chip>
+  }
+  if (sugerencia.accion === 'subir') {
+    return (
+      <Chip color={C.accentText} dim={C.accentDim}>
+        <IconTrendingUp size={11} color={C.accentText} />
+        {sugerencia.weight_kg} kg · {sugerencia.motivo}
+      </Chip>
+    )
+  }
+  if (sugerencia.accion === 'sumar_reps') {
+    return (
+      <Chip color={C.blue} dim={C.blueDim}>
+        {sugerencia.weight_kg} kg × {sugerencia.reps} · {sugerencia.motivo}
+      </Chip>
+    )
+  }
+  return (
+    <Chip color={C.textMuted} dim={C.surfaceHigh} borde={false}>
+      {sugerencia.weight_kg} kg × {sugerencia.reps} · {sugerencia.motivo}
+    </Chip>
+  )
+}
+
+export function ChipEstancado({ sesionesSinPR }) {
+  return (
+    <Chip color={C.red} dim={C.redDim}>
+      <IconWarning size={11} color={C.red} />
+      {sesionesSinPR} sesiones sin PR
+    </Chip>
+  )
 }

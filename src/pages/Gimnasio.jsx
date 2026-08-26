@@ -3,9 +3,11 @@ import { supabase } from '../supabase'
 import { C } from '../theme'
 import { IconPlan, IconTrash, IconGym, IconCheck, IconClose } from '../components/icons'
 import { mejorSerie, pesoMaximo, detectarPR, normalizarNombre } from '../services/oneRepMax'
+import { progresionDe } from '../services/progresion'
 import {
   TabButton, BadgePR, Pill, PrimarySmallButton, ActionButton,
   TinyGhostButton, TinyDangerButton, ModalPrimaryButton, ModalSecondaryButton,
+  ChipProgresion, ChipEstancado,
 } from '../components/gym'
 
 const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
@@ -48,34 +50,52 @@ export default function Gimnasio({ session }) {
   const [modalEj, setModalEj] = useState(null)
   const [cargandoPlantilla, setCargandoPlantilla] = useState(false)
   const [historicoPR, setHistoricoPR] = useState({})
+  const [progresiones, setProgresiones] = useState({})
   const isMobile = useIsMobile()
 
   const hoy = new Date().toLocaleDateString('sv-SE')
 
-  useEffect(() => { cargarHoy(); cargarHistorial(); cargarHistoricoPR() }, [])
+  useEffect(() => { cargarHoy(); cargarHistorial(); cargarHistorico() }, [])
 
-  // Mejor 1RM histórico por ejercicio (nombre normalizado → { serie, unaRM }),
-  // excluyendo la sesión de hoy: si no, el récord de hoy se compararía consigo mismo.
-  async function cargarHistoricoPR() {
+  // Una sola query alimenta las dos derivaciones: mejor 1RM histórico (para el PR)
+  // y progresión (sugerencia + estancamiento + deload). Excluye la sesión de hoy:
+  // si no, el récord de hoy se compararía consigo mismo.
+  async function cargarHistorico() {
     const { data } = await supabase
       .from('gym_exercises')
-      .select('exercise_name, gym_sets(weight_kg, reps), gym_logs!inner(user_id, date)')
+      .select('exercise_name, gym_sets(weight_kg, reps, rir), gym_logs!inner(user_id, date)')
       .eq('gym_logs.user_id', session.user.id)
       .neq('gym_logs.date', hoy)
 
-    const mapa = {}
+    // Agrupar por nombre normalizado: la normalización vive en JS y la base no la conoce.
+    const porNombre = {}
     for (const ej of data || []) {
       const clave = normalizarNombre(ej.exercise_name)
-      const mejor = mejorSerie(ej.gym_sets || [])
-      if (!mejor) continue
-      if (!mapa[clave] || mejor.unaRM > mapa[clave].unaRM) mapa[clave] = mejor
+      if (!porNombre[clave]) porNombre[clave] = []
+      porNombre[clave].push(ej)
     }
-    setHistoricoPR(mapa)
+
+    const mapaPR = {}
+    const mapaProgresion = {}
+    for (const [clave, filas] of Object.entries(porNombre)) {
+      for (const ej of filas) {
+        const mejor = mejorSerie(ej.gym_sets || [])
+        if (!mejor) continue
+        if (!mapaPR[clave] || mejor.unaRM > mapaPR[clave].unaRM) mapaPR[clave] = mejor
+      }
+      mapaProgresion[clave] = progresionDe(filas)
+    }
+    setHistoricoPR(mapaPR)
+    setProgresiones(mapaProgresion)
   }
 
   // Compara el mejor 1RM de hoy para este ejercicio contra el histórico previo.
   function prDe(ej) {
     return detectarPR(mejorSerie(ej.gym_sets || []), historicoPR[normalizarNombre(ej.exercise_name)])
+  }
+
+  function progresionDeEj(ej) {
+    return progresiones[normalizarNombre(ej.exercise_name)] || null
   }
 
   async function cargarHoy() {
@@ -155,7 +175,7 @@ export default function Gimnasio({ session }) {
       if (errorSets) { alert('No se pudieron cargar las series de la plantilla. Reintentá.'); setCargandoPlantilla(false); return }
     }
 
-    await cargarHoy(); await cargarHistoricoPR(); setCargandoPlantilla(false)
+    await cargarHoy(); await cargarHistorico(); setCargandoPlantilla(false)
   }
 
   async function limpiarEjercicios() {
@@ -196,7 +216,7 @@ export default function Gimnasio({ session }) {
       if (errorSets) { alert('No se pudo guardar el ejercicio. Reintentá.'); setSaving(false); return }
     }
 
-    await cargarHoy(); await cargarHistorial(); await cargarHistoricoPR(); setSaving(false); setModalEj(null)
+    await cargarHoy(); await cargarHistorial(); await cargarHistorico(); setSaving(false); setModalEj(null)
   }
 
   async function eliminarEjercicio(id) {
@@ -336,6 +356,14 @@ export default function Gimnasio({ session }) {
                           <TinyDangerButton onClick={() => eliminarEjercicio(ej.id)}><IconClose size={11} /></TinyDangerButton>
                         </div>
                       </div>
+                      {progresionDeEj(ej) && (
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                          <ChipProgresion sugerencia={progresionDeEj(ej).sugerencia} />
+                          {progresionDeEj(ej).estancamiento.estancado && (
+                            <ChipEstancado sesionesSinPR={progresionDeEj(ej).estancamiento.sesionesSinPR} />
+                          )}
+                        </div>
+                      )}
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <span style={{ fontSize: '13px', color: C.textSecondary }}>{resumenSeries(ej.gym_sets) || 'Sin series'}</span>
                         {mejorSerie(ej.gym_sets || []) && (
@@ -373,6 +401,14 @@ export default function Gimnasio({ session }) {
                               <span>{ej.exercise_name}</span>
                               {prDe(ej).esPR && <BadgePR mejora={prDe(ej).mejora} />}
                             </div>
+                            {progresionDeEj(ej) && (
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                <ChipProgresion sugerencia={progresionDeEj(ej).sugerencia} />
+                                {progresionDeEj(ej).estancamiento.estancado && (
+                                  <ChipEstancado sesionesSinPR={progresionDeEj(ej).estancamiento.sesionesSinPR} />
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: '12px 14px', color: C.textSecondary, fontVariantNumeric: 'tabular-nums' }}>
                             {ej.gym_sets?.length > 0 ? ej.gym_sets.map(formatoSerie).join('  ·  ') : '—'}

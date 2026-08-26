@@ -89,3 +89,9 @@ export function IconRobot(p) {
 export function IconTrophy(p) {
   return <Svg {...p}><path d="M7 4h10v5a5 5 0 0 1-10 0V4z" /><path d="M7 6H4v2a3 3 0 0 0 3 3" /><path d="M17 6h3v2a3 3 0 0 1-3 3" /><line x1="12" y1="14" x2="12" y2="18" /><path d="M8 21h8" /><path d="M10 18h4v3h-4z" /></Svg>
 }
+export function IconTrendingUp(p) {
+  return <Svg {...p}><polyline points="3 17 9 11 13 15 21 7" /><polyline points="15 7 21 7 21 13" /></Svg>
+}
+export function IconTrendingDown(p) {
+  return <Svg {...p}><polyline points="3 7 9 13 13 9 21 17" /><polyline points="15 17 21 17 21 11" /></Svg>
+}
