@@ -9,10 +9,14 @@ es sobre **cómo se escribe** el código, no sobre qué hace la app.
 ## Regla no negociable
 
 **Ningún bullet de un ROADMAP se marca completo sin correr su test o verificación
-correspondiente.** La suite completa (`npm test`) corre antes de cada commit que
-toque `src/services/`. Si un cambio no tiene forma de testearse automáticamente
-(componentes React, flujos de Supabase), el bullet debe traer su propia verificación
-manual explícita — pasos concretos, no "probar que funcione".
+correspondiente.** La suite completa (`npm test`) corre antes de **cada** commit, sin
+excepción — no solo los que tocan `src/services/`. Un commit de UI también puede
+romper un servicio: si importa mal, renombra algo o cambia la forma de un dato, el
+test lo agarra y la revisión visual no.
+
+Si un cambio no tiene forma de testearse automáticamente (componentes React, flujos
+de Supabase), el bullet debe traer su propia verificación manual explícita — pasos
+concretos con el resultado esperado, no "probar que funcione".
 
 Ver `vibecoding-estructurado.md` (vault personal) para el flujo completo del que
 sale esta regla.
@@ -75,12 +79,16 @@ el nombre de la función) ni que referencie la tarea o el commit que lo originó
 - **Breakpoint mobile:** `window.innerWidth < 640`, vía el hook local `useIsMobile()`
   que cada página define (no está centralizado — seguir el patrón existente).
 - **Componentes de botón/pill/badge pequeños:** se definen al final del archivo de
-  la página que los usa (ver `PrimarySmallButton`, `ActionButton`, `Pill` al final
-  de `Gimnasio.jsx`), no en un archivo compartido, salvo que se reutilicen en 3+
-  páginas.
+  la página que los usa. Cuando esa página pasa de ~500 líneas, se mueven a
+  `src/components/<pagina>.jsx` (ver `src/components/gym.jsx`, extraído de
+  `Gimnasio.jsx`) — el archivo por página, no un `components/ui.jsx` genérico:
+  los componentes que cambian juntos viven juntos. Solo se comparten entre páginas
+  los que se reutilizan en 3+.
 - **Servicios (`src/services/`):** funciones puras o llamadas a APIs externas, sin
-  JSX, sin `useState`. Un archivo por responsabilidad (`geminiPlan.js`,
-  `notifications.js`, `oneRepMax.js`).
+  JSX, sin `useState`. **Un archivo por responsabilidad**, aunque estén relacionados:
+  `oneRepMax.js` es aritmética de 1RM y `progresion.js` son reglas de entrenamiento,
+  y se mantienen separados porque cambian por motivos distintos. La dependencia va en
+  una sola dirección (`progresion.js` importa de `oneRepMax.js`, nunca al revés).
 - **Sin dependencias de UI externas.** No MUI, no Chakra, no Radix, no Tailwind.
 - Nombres de archivo de página en PascalCase (`Dashboard.jsx`), servicios y hooks
   en camelCase (`geminiPlan.js`, `useInteractiveStyle.js`).
@@ -97,8 +105,18 @@ el nombre de la función) ni que referencie la tarea o el commit que lo originó
   bug pasa desapercibido y muestra un número o estado equivocado sin fallar.
 - Cada test describe un caso de negocio concreto (`"no es PR la primera vez que se
   hace el ejercicio"`), no una línea de código.
-- `npm test` antes de cada commit que toque `src/services/`.
-- `npm run lint` antes de cada commit, siempre.
+- Los tests son de **comportamiento observable**, no de implementación: se testea la
+  API exportada del servicio, nunca sus funciones internas. Si un test se rompe al
+  refactorizar sin cambiar el comportamiento, estaba mal escrito.
+- **Cada regla de negocio con un valor de corte trae su test de borde.** El tope de
+  15 reps, el umbral de RIR 2, las 3 sesiones de estancamiento: se testea el valor
+  justo adentro y el justo afuera, porque ahí es donde se equivoca el off-by-one.
+- `npm test && npm run lint` antes de cada commit, siempre.
+- **`npm run lint` arranca en rojo** (22 errores y 7 warnings preexistentes, sin
+  relación con ninguna feature en curso). Hasta que se limpien, el criterio es **no
+  sumar errores nuevos**, no "lint en verde": comparar el conteo antes y después del
+  cambio. Un import que quedó sin usar tras un refactor es el caso más común y se
+  arregla en el momento.
 
 ---
 

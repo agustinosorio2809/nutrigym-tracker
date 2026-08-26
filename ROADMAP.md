@@ -32,7 +32,12 @@ que ya alimenta el PR — alimenta también sugerencia y estancamiento.
 - **Breakpoint mobile:** `window.innerWidth < 640`.
 - **No se toca la base de datos.** Ninguna tarea de este roadmap escribe SQL.
 - **Commits convencionales** vía CLI (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`).
-- Correr `npm run lint && npm test` antes de cada commit.
+- Correr `npm test && npm run lint` antes de cada commit.
+- **`npm run lint` ya arranca en rojo:** el repo tiene 22 errores y 7 warnings
+  preexistentes, ajenos a este roadmap (imports sin usar, `process` no definido,
+  `Cannot access variable before it is declared`). El criterio no es "lint limpio" sino
+  **no sumar errores nuevos**: comparar el conteo antes y después con
+  `npm run lint 2>&1 | tail -3`. Limpiarlos es un trabajo aparte, no de este roadmap.
 
 ---
 
@@ -181,7 +186,7 @@ export function sesionesDeEjercicio(filas) {
 npm test
 ```
 
-Esperado: PASS. 7 tests nuevos, más los 21 que ya existían de `oneRepMax`.
+Esperado: PASS. 7 tests nuevos, más los 26 que ya existían de `oneRepMax`.
 
 - [ ] **Paso 5: lint y commit**
 
@@ -718,8 +723,8 @@ export function progresionDe(filas) {
 npm test
 ```
 
-Esperado: PASS, 10 tests nuevos. Total de la suite: 55 tests
-(21 de `oneRepMax` + 34 de `progresion`).
+Esperado: PASS, 10 tests nuevos. Total de la suite: 60 tests
+(26 de `oneRepMax` + 34 de `progresion`).
 
 - [ ] **Paso 5: lint y commit**
 
@@ -786,8 +791,9 @@ la página, sacarlos también — `npm run lint` lo va a marcar.
 npm run lint && npm test && npm run build
 ```
 
-Esperado: sin errores de lint (en particular, ningún import sin usar), 55 tests en verde,
-build exitoso.
+Esperado: 60 tests en verde, build exitoso, y **el mismo conteo de errores de lint que
+antes de la tarea** (22 preexistentes). Si subió, casi seguro es un import que quedó sin
+usar en `Gimnasio.jsx` después de mover los componentes.
 
 ```bash
 npm run dev
@@ -1272,7 +1278,8 @@ detección de estancamiento y deload.
 npm test && npm run lint && npm run build
 ```
 
-Esperado: 55 tests en verde, sin errores de lint, build exitoso.
+Esperado: 60 tests en verde, build exitoso, y el conteo de errores de lint sin subir
+respecto de los 22 preexistentes.
 
 - [ ] **Paso 5: commit**
 

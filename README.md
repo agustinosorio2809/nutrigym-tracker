@@ -32,6 +32,7 @@ A full-stack progressive web app for tracking nutrition and gym routines, with A
 | AI | Google Gemini 2.5 Flash Lite |
 | Charts | Recharts |
 | Excel import | ExcelJS |
+| Tests | Vitest |
 | CI/CD | GitHub Actions |
 
 ---
@@ -44,13 +45,30 @@ nutrigym-tracker/
 │   └── gemini.js         # Vercel serverless proxy — keeps Gemini API key server-side
 ├── src/
 │   ├── pages/            # Dashboard, PlanSemanal, Viandas, Gimnasio, Perfil
-│   ├── services/         # geminiPlan.js, notifications.js
+│   ├── services/         # Pure logic + external APIs — no JSX, no hooks
+│   │   ├── geminiPlan.js       # Weekly plan generation via /api/gemini
+│   │   ├── notifications.js    # Local notification scheduling (Capacitor)
+│   │   └── oneRepMax.js        # Epley 1RM estimate, best set, PR detection
+│   ├── components/       # icons.jsx (shared SVG icon set)
+│   ├── hooks/            # useInteractiveStyle.js (hover/focus/active — no CSS files)
+│   ├── theme.js          # Design tokens (colors, spacing)
 │   ├── App.jsx           # Auth, routing, nav
 │   └── supabase.js       # Supabase client (singleton)
+├── docs/superpowers/
+│   ├── specs/            # Design docs, one per feature spec
+│   └── roadmaps/         # Completed implementation roadmaps
 ├── supabase/migrations/  # SQL schema + RLS policies
 ├── android/              # Capacitor Android project
 └── .github/workflows/    # GitHub Actions (APK build)
 ```
+
+Business logic lives in `src/services/` as pure functions with no Supabase or React
+dependency, so it can be tested without mocks. Pages do the I/O and hand already-loaded
+data to those functions.
+
+**Repo conventions:** `CLAUDE.md` (architecture and stack), `CODESTYLE.md` (how code is
+written), `DECISIONS.md` (ambiguities resolved during implementation, with the why),
+`ROADMAP.md` (the feature currently being built), `design.md` (the design system).
 
 ---
 
@@ -102,6 +120,16 @@ VITE_SUPABASE_KEY=your_supabase_anon_key
 ```bash
 npm run dev
 ```
+
+### Tests
+
+```bash
+npm test          # run once
+npm run test:watch
+```
+
+Vitest covers the pure logic in `src/services/`. React components and Supabase queries
+are deliberately not tested — see `CODESTYLE.md § Testing` for the reasoning.
 
 ### Android APK
 

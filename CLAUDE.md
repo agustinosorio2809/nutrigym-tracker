@@ -28,7 +28,7 @@ Deploy: `git push origin main` dispara automaticamente Vercel (web) y GitHub Act
 | Mobile | Capacitor 8 (Android APK) |
 | IA | Google Gemini 2.5 Flash Lite (via `v1beta`) |
 | Graficos | Recharts |
-| Excel | SheetJS (`xlsx`) |
+| Excel | ExcelJS (`exceljs`) |
 | Notificaciones | `@capacitor/local-notifications` |
 
 ---
