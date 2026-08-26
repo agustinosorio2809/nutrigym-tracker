@@ -345,7 +345,7 @@ function AppLayout({ session, onLogout }) {
 
       <main style={{
         padding: isMobile ? '1rem 1rem calc(1rem + 64px)' : '2rem 2.5rem',
-        maxWidth: isMobile ? '100%' : '1000px',
+        maxWidth: isMobile ? '100%' : '1400px',
         marginLeft: isMobile ? 0 : RAIL_WIDTH,
       }}>
         <Routes>
