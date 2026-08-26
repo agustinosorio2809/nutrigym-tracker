@@ -67,3 +67,23 @@ export function sugerirProximo(sesiones) {
   }
   return { accion: 'mantener', weight_kg: peso, reps, motivo: 'llegaste al fallo' }
 }
+
+export const SESIONES_PARA_ESTANCAMIENTO = 3
+
+export function detectarEstancamiento(sesiones) {
+  const conMejor = (sesiones || []).filter(s => s?.mejor)
+  // Con menos de N+1 sesiones no hay evidencia suficiente de estancamiento.
+  if (conMejor.length <= SESIONES_PARA_ESTANCAMIENTO) return { estancado: false, sesionesSinPR: 0 }
+
+  const maximo = Math.max(...conMejor.map(s => s.mejor.unaRM))
+  // El récord se atribuye a la PRIMERA sesión que lo alcanzó (la más antigua),
+  // así un empate posterior no resetea el contador: empatar no es progresar.
+  // Como la lista viene descendente, se recorre desde el final.
+  let indiceRecord = 0
+  for (let i = conMejor.length - 1; i >= 0; i--) {
+    if (conMejor[i].mejor.unaRM === maximo) { indiceRecord = i; break }
+  }
+
+  const sesionesSinPR = indiceRecord
+  return { estancado: sesionesSinPR >= SESIONES_PARA_ESTANCAMIENTO, sesionesSinPR }
+}

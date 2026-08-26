@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sesionesDeEjercicio, sugerirProximo, INCREMENTO_KG } from './progresion'
+import { sesionesDeEjercicio, sugerirProximo, detectarEstancamiento, INCREMENTO_KG } from './progresion'
 
 // Helper: una fila de gym_exercises con la forma que devuelve Supabase.
 function fila(date, series) {
@@ -131,5 +131,73 @@ describe('sugerirProximo', () => {
   it('trata una serie con peso y RIR pero sin reps como no efectiva', () => {
     expect(sugerirProximo([sesion('2026-08-20', [{ weight_kg: 80, reps: null, rir: 2 }])]).accion)
       .toBe('sin_rir')
+  })
+})
+
+function sesionConRM(date, unaRM) {
+  return { date, series: [], mejor: unaRM === null ? null : { serie: {}, unaRM } }
+}
+
+describe('detectarEstancamiento', () => {
+  it('marca estancado tras 3 sesiones sin superar el récord', () => {
+    // orden descendente: la más reciente primero
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 100),
+      sesionConRM('2026-08-13', 98),
+      sesionConRM('2026-08-06', 99),
+      sesionConRM('2026-07-30', 102),   // ← el récord, hace 3 sesiones
+    ])
+    expect(r.estancado).toBe(true)
+    expect(r.sesionesSinPR).toBe(3)
+  })
+
+  it('no marca estancado si el récord es reciente', () => {
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 105),   // ← récord en la última
+      sesionConRM('2026-08-13', 98),
+      sesionConRM('2026-08-06', 99),
+      sesionConRM('2026-07-30', 102),
+    ])
+    expect(r.estancado).toBe(false)
+    expect(r.sesionesSinPR).toBe(0)
+  })
+
+  it('un empate no resetea el contador', () => {
+    // Se repite 102 en la última sesión, pero empatar no es progresar.
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 102),
+      sesionConRM('2026-08-13', 98),
+      sesionConRM('2026-08-06', 99),
+      sesionConRM('2026-07-30', 102),
+    ])
+    expect(r.estancado).toBe(true)
+    expect(r.sesionesSinPR).toBe(3)
+  })
+
+  it('nunca marca estancado con menos de 4 sesiones', () => {
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 90),
+      sesionConRM('2026-08-13', 95),
+      sesionConRM('2026-08-06', 100),
+    ])
+    expect(r.estancado).toBe(false)
+  })
+
+  it('ignora las sesiones sin 1RM estimable', () => {
+    const r = detectarEstancamiento([
+      sesionConRM('2026-08-20', 100),
+      sesionConRM('2026-08-13', null),
+      sesionConRM('2026-08-06', 98),
+      sesionConRM('2026-07-30', 99),
+      sesionConRM('2026-07-23', 102),
+    ])
+    // Quedan 4 sesiones con 1RM; el récord está en la más antigua.
+    expect(r.estancado).toBe(true)
+    expect(r.sesionesSinPR).toBe(3)
+  })
+
+  it('devuelve no estancado sin sesiones', () => {
+    expect(detectarEstancamiento([]).estancado).toBe(false)
+    expect(detectarEstancamiento(undefined).estancado).toBe(false)
   })
 })
