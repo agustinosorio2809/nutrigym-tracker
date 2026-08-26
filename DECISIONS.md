@@ -123,3 +123,35 @@ antes y después de aplicarlas.
 
 - **Las series sembradas por plantilla y nunca entrenadas contaminan el contador de estancamiento.** `cargarPlantilla()` escribe filas reales en `gym_sets` con `weight_kg`/`reps` (y `rir: null`). Si el usuario carga la plantilla mañana y no entrena ese día (o no borra la sesión), esas filas quedan indistinguibles de una sesión real: `mejorSerie()` les estima un 1RM y `detectarEstancamiento` las cuenta como sesión. Un usuario que carga la plantilla en 3 días de rutina sin entrenar puede ver el chip rojo "3 sesiones sin PR" y una oferta de deload calculada sobre pesos que nunca levantó. No es un bug del código — es una interacción no anticipada entre la Tarea 8 (siembra) y la Tarea 3 (contador) que no rompe ningún test existente. Documentado como limitación conocida, sin fix en este roadmap; una mitigación futura razonable sería que `detectarEstancamiento` ignore sesiones donde todas las series tienen `rir: null`.
 - **Perder el RIR de una sesión hace que la siembra vuelva silenciosamente al default viejo de la plantilla.** Es el comportamiento que el propio spec pide (`accion: 'sin_rir'` con `weight_kg: null` → cae en defaults), no una desviación — pero el chip que se muestra ("cargá el RIR para recibir sugerencias") no le avisa al usuario que el peso sembrado retrocedió respecto de su progresión real. Documentado como limitación conocida y aceptada por diseño.
+
+### Limpieza post-implementación (`/simplify`, 2026-08-26)
+
+Revisión con 4 agentes en paralelo (reuse, simplification, efficiency, altitude) sobre el
+diff completo de la sesión. Aplicado:
+
+- **`BadgePR` reconstruido sobre `Chip`** en vez de reimplementar la misma píldora visual
+  por separado. Se agregó un prop `weight` a `Chip` (default 600) para no perder el
+  `fontWeight: 700` original de `BadgePR`.
+- **`ChipsDeProgresion` extraído a `gym.jsx`** para eliminar la duplicación del bloque
+  sugerencia+estancamiento entre la tarjeta mobile y la fila de tabla desktop, que además
+  llamaba `progresionDeEj(ej)` cuatro veces por sitio en vez de una.
+- **`pesoParaSembrar()` extraído a `progresion.js`**, con tests propios. La decisión de
+  sembrar la sugerencia del motor o el default de la plantilla vivía como lógica de negocio
+  dentro de `cargarPlantilla()` en `Gimnasio.jsx`, cruzando la frontera I/O-vs-reglas que el
+  propio spec declara ("`Gimnasio.jsx` hace el I/O... el servicio puro tiene las reglas").
+
+Evaluado y descartado, con motivo:
+
+- **Micro-optimización del loop de RIR mínimo en `sugerirProximo`** (evitar llamar `rirDe`
+  dos veces por comparación): impacto nulo sobre arrays de a lo sumo 6 series por sesión, no
+  vale el costo de legibilidad.
+- **Acotar `react-hooks/immutability: 'off'` por archivo/línea en vez de a nivel de
+  proyecto**: se dejó global a propósito. El repo no usa React Compiler (el propósito único
+  de esa regla), así que hoy no protege nada real, mientras que el patrón que marca —
+  function declarations hoisted para los handlers de `useEffect`— es deliberado en toda la
+  app. Desactivarla puntualmente en cada uno de los ~9 sitios habría sido más ruido sin
+  beneficio.
+- **Separar `gym.jsx` en primitivas de botón genéricas (`NavBtn`, `TinyGhostButton`, etc.) +
+  componentes de dominio**: prematuro. CODESTYLE.md ya fija el criterio — compartir un
+  componente entre páginas recién cuando se reusa en 3+ — y ninguno de los botones
+  señalados llega a ese umbral todavía.
