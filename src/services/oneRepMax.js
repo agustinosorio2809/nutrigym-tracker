@@ -14,6 +14,7 @@ export function estimar1RM({ weight_kg, reps } = {}) {
   const r = Number(reps)
   if (!Number.isFinite(peso) || peso <= 0) return null
   if (!Number.isFinite(r) || r < 1 || r > MAX_REPS_ESTIMABLE) return null
+  // A 1 repetición el 1RM es exactamente el peso levantado (sin estimación), no aplicamos Epley
   if (r === 1) return peso
   return peso * (1 + r / 30)
 }
