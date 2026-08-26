@@ -5,6 +5,12 @@ import { IconPlan, IconTrash, IconGym, IconCheck, IconClose } from '../component
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
 
 const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
+const SERIE_VACIA = { weight_kg: '', reps: '', rir: '' }
+
+function formatoSerie(s) {
+  const base = `${s.weight_kg ?? '—'}kg × ${s.reps ?? '—'}`
+  return s.rir != null ? `${base} · RIR ${s.rir}` : base
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
@@ -36,7 +42,7 @@ export default function Gimnasio({ session }) {
   const [sesionHoy, setSesionHoy] = useState(null)
   const [ejercicios, setEjercicios] = useState([])
   const [formSesion, setFormSesion] = useState({ routine_type: '', notes: '', completed: false })
-  const [formEj, setFormEj] = useState({ exercise_name: '', sets: '', reps: '', weight_kg: '', rir: '', notes: '' })
+  const [formEj, setFormEj] = useState({ exercise_name: '', notes: '', series: [{ ...SERIE_VACIA }] })
   const [saving, setSaving] = useState(false)
   const [modalEj, setModalEj] = useState(null)
   const [cargandoPlantilla, setCargandoPlantilla] = useState(false)
@@ -52,14 +58,24 @@ export default function Gimnasio({ session }) {
     setSesionHoy(sesion)
     setFormSesion({ routine_type: sesion?.routine_type || '', notes: sesion?.notes || '', completed: sesion?.completed || false })
     if (sesion) {
-      const { data: ejs } = await supabase.from('gym_exercises').select('*').eq('log_id', sesion.id).order('id')
+      const { data: ejs } = await supabase
+        .from('gym_exercises')
+        .select('*, gym_sets(*)')
+        .eq('log_id', sesion.id)
+        .order('id')
+        .order('set_number', { referencedTable: 'gym_sets' })
       setEjercicios(ejs || [])
     }
     setLoading(false)
   }
 
   async function cargarHistorial() {
-    const { data } = await supabase.from('gym_logs').select('*, gym_exercises(*)').eq('user_id', session.user.id).order('date', { ascending: false }).limit(20)
+    const { data } = await supabase
+      .from('gym_logs')
+      .select('*, gym_exercises(*, gym_sets(*))')
+      .eq('user_id', session.user.id)
+      .order('date', { ascending: false })
+      .limit(20)
     setSesiones(data || [])
   }
 
@@ -94,9 +110,29 @@ export default function Gimnasio({ session }) {
 
   async function guardarEjercicio() {
     setSaving(true)
-    const datos = { ...formEj, sets: Number(formEj.sets) || null, reps: Number(formEj.reps) || null, weight_kg: Number(formEj.weight_kg) || null, rir: Number(formEj.rir) || null, log_id: sesionHoy.id }
-    if (modalEj === 'nuevo') { await supabase.from('gym_exercises').insert(datos) }
-    else { await supabase.from('gym_exercises').update(datos).eq('id', modalEj.id) }
+    const base = { exercise_name: formEj.exercise_name, notes: formEj.notes, log_id: sesionHoy.id }
+
+    let exerciseId
+    if (modalEj === 'nuevo') {
+      const { data } = await supabase.from('gym_exercises').insert(base).select()
+      exerciseId = data?.[0]?.id
+    } else {
+      exerciseId = modalEj.id
+      await supabase.from('gym_exercises').update(base).eq('id', exerciseId)
+      await supabase.from('gym_sets').delete().eq('exercise_id', exerciseId)
+    }
+
+    const filas = formEj.series.map((s, i) => ({
+      exercise_id: exerciseId,
+      set_number: i + 1,
+      weight_kg: s.weight_kg === '' ? null : Number(s.weight_kg),
+      reps: s.reps === '' ? null : Number(s.reps),
+      // RIR 0 es un valor válido y significativo: comparar contra '' y no usar
+      // `Number(x) || null`, que lo convertiría en null.
+      rir: s.rir === '' ? null : Number(s.rir),
+    }))
+    if (filas.length) await supabase.from('gym_sets').insert(filas)
+
     await cargarHoy(); await cargarHistorial(); setSaving(false); setModalEj(null)
   }
 
@@ -107,13 +143,46 @@ export default function Gimnasio({ session }) {
   }
 
   function abrirNuevoEj() {
-    setFormEj({ exercise_name: '', sets: '', reps: '', weight_kg: '', rir: '', notes: '' })
+    setFormEj({ exercise_name: '', notes: '', series: [{ ...SERIE_VACIA }] })
     setModalEj('nuevo')
   }
 
   function abrirEditarEj(ej) {
-    setFormEj({ exercise_name: ej.exercise_name, sets: ej.sets || '', reps: ej.reps || '', weight_kg: ej.weight_kg || '', rir: ej.rir || '', notes: ej.notes || '' })
+    const series = (ej.gym_sets || [])
+      .slice()
+      .sort((a, b) => a.set_number - b.set_number)
+      .map(s => ({
+        weight_kg: s.weight_kg ?? '',
+        reps: s.reps ?? '',
+        rir: s.rir ?? '',
+      }))
+    setFormEj({
+      exercise_name: ej.exercise_name,
+      notes: ej.notes || '',
+      series: series.length ? series : [{ ...SERIE_VACIA }],
+    })
     setModalEj(ej)
+  }
+
+  function actualizarSerie(i, campo, valor) {
+    setFormEj(f => ({
+      ...f,
+      series: f.series.map((s, idx) => (idx === i ? { ...s, [campo]: valor } : s)),
+    }))
+  }
+
+  function agregarSerie() {
+    setFormEj(f => ({ ...f, series: [...f.series, { ...SERIE_VACIA }] }))
+  }
+
+  // Cargar 4 series iguales no puede costar 4 veces el trabajo: es el caso más
+  // frecuente y sin esto la carga empeora respecto del formulario anterior.
+  function duplicarUltimaSerie() {
+    setFormEj(f => ({ ...f, series: [...f.series, { ...f.series[f.series.length - 1] }] }))
+  }
+
+  function quitarSerie(i) {
+    setFormEj(f => ({ ...f, series: f.series.filter((_, idx) => idx !== i) }))
   }
 
   const inp = {
@@ -202,11 +271,17 @@ export default function Gimnasio({ session }) {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                        {ej.sets && <Pill label="Series" value={ej.sets} />}
-                        {ej.reps && <Pill label="Reps" value={ej.reps} />}
-                        {ej.weight_kg && <Pill label="Kg" value={ej.weight_kg} accent />}
-                        {ej.rir != null && ej.rir !== '' && <Pill label="RIR" value={ej.rir} />}
+                        <Pill label="Series" value={ej.gym_sets?.length || 0} accent />
                       </div>
+                      {ej.gym_sets?.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                          {ej.gym_sets.map(s => (
+                            <span key={s.id} style={{ fontSize: '12px', background: C.surfaceHigh, color: C.textSecondary, padding: '3px 10px', borderRadius: '8px', fontVariantNumeric: 'tabular-nums' }}>
+                              {formatoSerie(s)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {ej.notes && <div style={{ fontSize: '12px', color: C.textMuted, marginTop: '8px', fontStyle: 'italic' }}>{ej.notes}</div>}
                     </div>
                   ))}
@@ -216,7 +291,7 @@ export default function Gimnasio({ session }) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                        {['Ejercicio', 'Series', 'Reps', 'Kg', 'RIR', 'Notas', ''].map(h => (
+                        {['Ejercicio', 'Series', 'Notas', ''].map(h => (
                           <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: C.textMuted, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
                         ))}
                       </tr>
@@ -225,10 +300,9 @@ export default function Gimnasio({ session }) {
                       {ejercicios.map((ej, i) => (
                         <tr key={ej.id} style={{ borderBottom: i < ejercicios.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                           <td style={{ padding: '12px 14px', fontWeight: 600, color: C.textPrimary }}>{ej.exercise_name}</td>
-                          <td style={{ padding: '12px 14px', color: C.textSecondary }}>{ej.sets || '—'}</td>
-                          <td style={{ padding: '12px 14px', color: C.textSecondary }}>{ej.reps || '—'}</td>
-                          <td style={{ padding: '12px 14px', color: C.accentText, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{ej.weight_kg ? `${ej.weight_kg} kg` : '—'}</td>
-                          <td style={{ padding: '12px 14px', color: C.textSecondary }}>{ej.rir ?? '—'}</td>
+                          <td style={{ padding: '12px 14px', color: C.textSecondary, fontVariantNumeric: 'tabular-nums' }}>
+                            {ej.gym_sets?.length > 0 ? ej.gym_sets.map(formatoSerie).join('  ·  ') : '—'}
+                          </td>
                           <td style={{ padding: '12px 14px', color: C.textMuted, fontSize: '12px' }}>{ej.notes || ''}</td>
                           <td style={{ padding: '12px 14px' }}>
                             <div style={{ display: 'flex', gap: '6px' }}>
@@ -279,11 +353,15 @@ export default function Gimnasio({ session }) {
                   </div>
                   {s.gym_exercises?.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
-                      {s.gym_exercises.map(ej => (
-                        <span key={ej.id} style={{ fontSize: '12px', background: C.surfaceHigh, color: C.textSecondary, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` }}>
-                          {ej.exercise_name}{ej.weight_kg ? ` · ${ej.weight_kg}kg` : ''}
-                        </span>
-                      ))}
+                      {s.gym_exercises.map(ej => {
+                        const pesos = (ej.gym_sets || []).map(gs => gs.weight_kg).filter(w => w != null)
+                        const pesoMax = pesos.length ? Math.max(...pesos) : null
+                        return (
+                          <span key={ej.id} style={{ fontSize: '12px', background: C.surfaceHigh, color: C.textSecondary, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` }}>
+                            {ej.exercise_name}{pesoMax != null ? ` · ${pesoMax}kg` : ''}
+                          </span>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -305,14 +383,26 @@ export default function Gimnasio({ session }) {
             <label style={{ fontSize: '12px', color: C.textMuted }}>Ejercicio</label>
             <input value={formEj.exercise_name} onChange={e => setFormEj({ ...formEj, exercise_name: e.target.value })} style={inp} placeholder="Ej: Sentadilla con barra" />
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              {[['sets', 'Series', '4'], ['reps', 'Reps', '8'], ['weight_kg', 'Peso (kg)', '80'], ['rir', 'RIR', '2']].map(([key, label, ph]) => (
-                <div key={key}>
-                  <label style={{ fontSize: '12px', color: C.textMuted }}>{label}</label>
-                  <input type="number" value={formEj[key]} onChange={e => setFormEj({ ...formEj, [key]: e.target.value })}
-                    style={inp} placeholder={ph} />
-                </div>
-              ))}
+            <div style={{ fontSize: '12px', color: C.textMuted, marginBottom: '6px' }}>Series</div>
+
+            {formEj.series.map((s, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 1fr 1fr 32px', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
+                <input type="number" inputMode="decimal" value={s.weight_kg} placeholder="kg"
+                  onChange={e => actualizarSerie(i, 'weight_kg', e.target.value)} style={{ ...inp, margin: 0 }} />
+                <input type="number" inputMode="numeric" value={s.reps} placeholder="reps"
+                  onChange={e => actualizarSerie(i, 'reps', e.target.value)} style={{ ...inp, margin: 0 }} />
+                <input type="number" inputMode="numeric" value={s.rir} placeholder="RIR"
+                  onChange={e => actualizarSerie(i, 'rir', e.target.value)} style={{ ...inp, margin: 0 }} />
+                {formEj.series.length > 1
+                  ? <TinyDangerButton onClick={() => quitarSerie(i)}><IconClose size={11} /></TinyDangerButton>
+                  : <span />}
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', gap: '8px', margin: '4px 0 16px' }}>
+              <TinyGhostButton onClick={agregarSerie}>+ Serie</TinyGhostButton>
+              <TinyGhostButton onClick={duplicarUltimaSerie}>Duplicar última</TinyGhostButton>
             </div>
 
             <label style={{ fontSize: '12px', color: C.textMuted }}>Observaciones</label>
