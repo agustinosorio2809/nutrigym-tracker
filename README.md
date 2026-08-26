@@ -12,6 +12,7 @@ A full-stack progressive web app for tracking nutrition and gym routines, with A
 - **AI meal planning** — generate a personalized weekly meal plan with Gemini 2.5 Flash Lite
 - **Viandas inventory** — track your prepared meal containers (viandas) and portion counts
 - **Gym routines** — structured workout sessions organized by muscle group with weight/reps history
+- **Estimated 1RM & PR detection** — per-exercise one-rep-max estimate (Epley) and automatic personal-record detection from set history
 - **Local notifications** — configurable meal-time reminders (Android)
 - **Body recomposition focus** — nutrition and training designed around fat loss + muscle maintenance
 - **Dark mode UI** — clean interface with bottom navigation
@@ -126,6 +127,7 @@ Hosted on Supabase with Row Level Security enabled on all tables (each user sees
 | `viandas` | Prepared meal container inventory with portion counts |
 | `gym_logs` | Gym session records |
 | `gym_exercises` | Exercises within a session |
+| `gym_sets` | Individual sets per exercise (weight, reps, RIR) |
 | `routine_templates` | Saved exercise templates per routine type |
 | `user_profile` | Physical stats, training days, notification prefs |
 

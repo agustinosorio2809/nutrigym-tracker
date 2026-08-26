@@ -9,6 +9,7 @@ Contexto de proyecto para Claude Code. Leer antes de tocar cualquier archivo.
 ```bash
 npm run dev          # Dev server en localhost:5173
 npm run build        # Build de produccion (genera dist/)
+npm test             # Suite de tests (Vitest) — correr antes de cada commit
 npx cap sync android # Sincroniza dist/ al proyecto Android (Capacitor)
 npx cap open android # Abre Android Studio (build manual del APK)
 ```
@@ -71,7 +72,8 @@ RLS activado en todas las tablas. Cada usuario ve solo sus propios datos.
 | `meal_logs` | Registro diario | `id`, `planned_meal_id`, `status`, `actual_meal`, `exception_type`, `notes` |
 | `viandas` | Inventario de viandas | `id`, `user_id`, `name`, `protein_source`, `category`, `portions`, `notes` |
 | `gym_logs` | Sesiones de gimnasio | `id`, `user_id`, `date`, `routine_type`, `notes`, `completed` |
-| `gym_exercises` | Ejercicios por sesion | `id`, `log_id`, `exercise_name`, `sets`, `reps`, `weight_kg`, `rir`, `notes` |
+| `gym_exercises` | Ejercicios por sesion | `id`, `log_id`, `exercise_name`, `notes` |
+| `gym_sets` | Series por ejercicio | `id`, `exercise_id`, `set_number`, `weight_kg`, `reps`, `rir` |
 | `routine_templates` | Plantillas de rutinas | `id`, `user_id`, `routine_type`, `exercise_name`, `default_sets`, `default_reps`, `default_weight_kg`, `sort_order` |
 | `user_profile` | Perfil del usuario | `user_id`, `peso_kg`, `altura_cm`, `objetivo`, `dias_entreno`, `dia_partido`, `restricciones`, `notas_extra`, `notif_*` |
 
