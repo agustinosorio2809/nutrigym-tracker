@@ -31,3 +31,21 @@ export function mejorSerie(series) {
   }
   return mejor
 }
+
+// Los ejercicios se emparejan por nombre porque no hay catálogo. Sin esto,
+// "Press Banca" y "press banca " serían dos ejercicios distintos y se perdería
+// el histórico. No resuelve variantes de tipeo ("Press de banca"): ver la
+// limitación conocida en el spec.
+export function normalizarNombre(nombre) {
+  if (typeof nombre !== 'string') return ''
+  return nombre.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+// PR se define por 1RM estimado: engloba tanto subir el peso como hacer más
+// reps con el mismo peso. La primera vez que se hace un ejercicio no es récord.
+export function detectarPR(mejorHoy, mejorPrevio) {
+  if (!mejorHoy || !mejorPrevio) return { esPR: false, mejora: 0 }
+  const mejora = mejorHoy.unaRM - mejorPrevio.unaRM
+  if (mejora <= 0) return { esPR: false, mejora: 0 }
+  return { esPR: true, mejora }
+}

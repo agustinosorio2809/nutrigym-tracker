@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { estimar1RM, MAX_REPS_ESTIMABLE, mejorSerie } from './oneRepMax'
+import { estimar1RM, MAX_REPS_ESTIMABLE, mejorSerie, normalizarNombre, detectarPR } from './oneRepMax'
 
 describe('estimar1RM', () => {
   it('con 1 repetición devuelve el peso exacto', () => {
@@ -67,5 +67,43 @@ describe('mejorSerie', () => {
 
   it('devuelve null si no recibe un array', () => {
     expect(mejorSerie(undefined)).toBeNull()
+  })
+})
+
+describe('normalizarNombre', () => {
+  it('pasa a minúsculas y recorta los bordes', () => {
+    expect(normalizarNombre('  Press Banca ')).toBe('press banca')
+  })
+
+  it('colapsa espacios internos', () => {
+    expect(normalizarNombre('Press    Banca')).toBe('press banca')
+  })
+
+  it('devuelve string vacío si no recibe un string', () => {
+    expect(normalizarNombre(null)).toBe('')
+  })
+})
+
+describe('detectarPR', () => {
+  it('es PR cuando supera el 1RM histórico', () => {
+    const r = detectarPR({ unaRM: 105 }, { unaRM: 100 })
+    expect(r.esPR).toBe(true)
+    expect(r.mejora).toBeCloseTo(5, 2)
+  })
+
+  it('no es PR cuando empata', () => {
+    expect(detectarPR({ unaRM: 100 }, { unaRM: 100 }).esPR).toBe(false)
+  })
+
+  it('no es PR cuando queda por debajo', () => {
+    expect(detectarPR({ unaRM: 95 }, { unaRM: 100 }).esPR).toBe(false)
+  })
+
+  it('no es PR la primera vez que se hace el ejercicio', () => {
+    expect(detectarPR({ unaRM: 100 }, null).esPR).toBe(false)
+  })
+
+  it('no es PR si hoy no hay serie estimable', () => {
+    expect(detectarPR(null, { unaRM: 100 }).esPR).toBe(false)
   })
 })
