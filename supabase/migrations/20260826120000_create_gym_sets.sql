@@ -7,7 +7,7 @@
 
 CREATE TABLE IF NOT EXISTS gym_sets (
   id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  exercise_id bigint NOT NULL REFERENCES gym_exercises(id) ON DELETE CASCADE,
+  exercise_id uuid NOT NULL REFERENCES gym_exercises(id) ON DELETE CASCADE,
   set_number  int NOT NULL,
   weight_kg   numeric,
   reps        int,
