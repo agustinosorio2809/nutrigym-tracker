@@ -3,6 +3,7 @@ import { supabase } from '../supabase'
 import { C } from '../theme'
 import { IconPlan, IconTrash, IconGym, IconCheck, IconClose } from '../components/icons'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
+import { mejorSerie } from '../services/oneRepMax'
 
 const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
 const SERIE_VACIA = { weight_kg: '', reps: '', rir: '' }
@@ -10,6 +11,16 @@ const SERIE_VACIA = { weight_kg: '', reps: '', rir: '' }
 function formatoSerie(s) {
   const base = `${s.weight_kg ?? '—'}kg × ${s.reps ?? '—'}`
   return s.rir != null ? `${base} · RIR ${s.rir}` : base
+}
+
+// "4 series · mejor 85 × 5" — null si el ejercicio no tiene series cargadas.
+function resumenSeries(series) {
+  if (!series?.length) return null
+  const mejor = mejorSerie(series)
+  const cantidad = `${series.length} serie${series.length !== 1 ? 's' : ''}`
+  if (!mejor) return cantidad
+  const { weight_kg, reps } = mejor.serie
+  return `${cantidad} · mejor ${weight_kg} × ${reps}`
 }
 
 function useIsMobile() {
@@ -297,8 +308,11 @@ export default function Gimnasio({ session }) {
                           <TinyDangerButton onClick={() => eliminarEjercicio(ej.id)}><IconClose size={11} /></TinyDangerButton>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                        <Pill label="Series" value={ej.gym_sets?.length || 0} accent />
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span style={{ fontSize: '13px', color: C.textSecondary }}>{resumenSeries(ej.gym_sets) || 'Sin series'}</span>
+                        {mejorSerie(ej.gym_sets || []) && (
+                          <Pill label="1RM est." value={`${Math.round(mejorSerie(ej.gym_sets).unaRM)} kg`} accent />
+                        )}
                       </div>
                       {ej.gym_sets?.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
@@ -318,7 +332,7 @@ export default function Gimnasio({ session }) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                        {['Ejercicio', 'Series', 'Notas', ''].map(h => (
+                        {['Ejercicio', 'Series', '1RM est.', 'Notas', ''].map(h => (
                           <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: C.textMuted, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
                         ))}
                       </tr>
@@ -329,6 +343,9 @@ export default function Gimnasio({ session }) {
                           <td style={{ padding: '12px 14px', fontWeight: 600, color: C.textPrimary }}>{ej.exercise_name}</td>
                           <td style={{ padding: '12px 14px', color: C.textSecondary, fontVariantNumeric: 'tabular-nums' }}>
                             {ej.gym_sets?.length > 0 ? ej.gym_sets.map(formatoSerie).join('  ·  ') : '—'}
+                          </td>
+                          <td style={{ padding: '12px 14px', color: C.accentText, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                            {mejorSerie(ej.gym_sets || []) ? `${Math.round(mejorSerie(ej.gym_sets).unaRM)} kg` : '—'}
                           </td>
                           <td style={{ padding: '12px 14px', color: C.textMuted, fontSize: '12px' }}>{ej.notes || ''}</td>
                           <td style={{ padding: '12px 14px' }}>
@@ -381,11 +398,10 @@ export default function Gimnasio({ session }) {
                   {s.gym_exercises?.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
                       {s.gym_exercises.map(ej => {
-                        const pesos = (ej.gym_sets || []).map(gs => gs.weight_kg).filter(w => w != null)
-                        const pesoMax = pesos.length ? Math.max(...pesos) : null
+                        const mejor = mejorSerie(ej.gym_sets || [])
                         return (
                           <span key={ej.id} style={{ fontSize: '12px', background: C.surfaceHigh, color: C.textSecondary, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${C.border}` }}>
-                            {ej.exercise_name}{pesoMax != null ? ` · ${pesoMax}kg` : ''}
+                            {ej.exercise_name}{mejor ? ` · ${mejor.serie.weight_kg}kg` : ''}
                           </span>
                         )
                       })}
