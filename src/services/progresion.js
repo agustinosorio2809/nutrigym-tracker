@@ -124,6 +124,17 @@ export function sugerirDeload(sesiones) {
   return { weight_kg }
 }
 
+// Decide qué peso/reps sembrar al cargar una plantilla: la sugerencia del motor
+// cuando trae un weight_kg utilizable, o los defaults de la plantilla si no.
+// Cubre tanto la ausencia de sugerencia (ejercicio sin historial) como el caso
+// accion:'sin_rir' (weight_kg viene en null a propósito).
+export function pesoParaSembrar(sugerencia, defaults) {
+  if (sugerencia?.weight_kg != null) {
+    return { weight_kg: sugerencia.weight_kg, reps: sugerencia.reps }
+  }
+  return { weight_kg: defaults?.weight_kg ?? null, reps: defaults?.reps ?? null }
+}
+
 // Única función que consume la UI. Recibe las filas crudas de gym_exercises de un
 // mismo ejercicio y devuelve todo lo que hay que mostrar.
 export function progresionDe(filas) {

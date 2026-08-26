@@ -3,11 +3,11 @@ import { supabase } from '../supabase'
 import { C } from '../theme'
 import { IconPlan, IconTrash, IconGym, IconCheck, IconClose } from '../components/icons'
 import { mejorSerie, pesoMaximo, detectarPR, normalizarNombre } from '../services/oneRepMax'
-import { progresionDe } from '../services/progresion'
+import { progresionDe, pesoParaSembrar } from '../services/progresion'
 import {
   TabButton, BadgePR, Pill, PrimarySmallButton, ActionButton,
   TinyGhostButton, TinyDangerButton, ModalPrimaryButton, ModalSecondaryButton,
-  ChipProgresion, ChipEstancado, ChipDeload,
+  ChipsDeProgresion, ChipDeload,
 } from '../components/gym'
 
 const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
@@ -155,23 +155,16 @@ export default function Gimnasio({ session }) {
       .select()
     if (errorCreados) { alert('No se pudo cargar la plantilla. Reintentá.'); setCargandoPlantilla(false); return }
 
-    // default_sets de la plantilla define cuántas series se siembran; el peso y las
-    // reps salen del motor de progresión cuando hay sugerencia. Con accion 'sin_rir'
-    // el weight_kg viene en null, así que cae en los defaults de la plantilla.
+    // default_sets de la plantilla define cuántas series se siembran; el peso y
+    // las reps salen de pesoParaSembrar (motor de progresión o defaults).
     const filas = []
     creados?.forEach((ej, i) => {
       const p = plantilla[i]
       const sugerencia = progresiones[normalizarNombre(ej.exercise_name)]?.sugerencia
-      const usarSugerencia = sugerencia?.weight_kg != null
+      const { weight_kg, reps } = pesoParaSembrar(sugerencia, { weight_kg: p.default_weight_kg, reps: p.default_reps })
       const cantidad = Math.max(p.default_sets || 1, 1)
       for (let n = 1; n <= cantidad; n++) {
-        filas.push({
-          exercise_id: ej.id,
-          set_number: n,
-          weight_kg: usarSugerencia ? sugerencia.weight_kg : (p.default_weight_kg ?? null),
-          reps: usarSugerencia ? sugerencia.reps : (p.default_reps ?? null),
-          rir: null,
-        })
+        filas.push({ exercise_id: ej.id, set_number: n, weight_kg, reps, rir: null })
       }
     })
     if (filas.length) {
@@ -370,14 +363,7 @@ export default function Gimnasio({ session }) {
                           <TinyDangerButton onClick={() => eliminarEjercicio(ej.id)}><IconClose size={11} /></TinyDangerButton>
                         </div>
                       </div>
-                      {progresionDeEj(ej) && (
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
-                          <ChipProgresion sugerencia={progresionDeEj(ej).sugerencia} />
-                          {progresionDeEj(ej).estancamiento.estancado && (
-                            <ChipEstancado sesionesSinPR={progresionDeEj(ej).estancamiento.sesionesSinPR} />
-                          )}
-                        </div>
-                      )}
+                      <ChipsDeProgresion progresion={progresionDeEj(ej)} />
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <span style={{ fontSize: '13px', color: C.textSecondary }}>{resumenSeries(ej.gym_sets) || 'Sin series'}</span>
                         {mejorSerie(ej.gym_sets || []) && (
@@ -415,14 +401,7 @@ export default function Gimnasio({ session }) {
                               <span>{ej.exercise_name}</span>
                               {prDe(ej).esPR && <BadgePR mejora={prDe(ej).mejora} />}
                             </div>
-                            {progresionDeEj(ej) && (
-                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
-                                <ChipProgresion sugerencia={progresionDeEj(ej).sugerencia} />
-                                {progresionDeEj(ej).estancamiento.estancado && (
-                                  <ChipEstancado sesionesSinPR={progresionDeEj(ej).estancamiento.sesionesSinPR} />
-                                )}
-                              </div>
-                            )}
+                            <ChipsDeProgresion progresion={progresionDeEj(ej)} />
                           </td>
                           <td style={{ padding: '12px 14px', color: C.textSecondary, fontVariantNumeric: 'tabular-nums' }}>
                             {ej.gym_sets?.length > 0 ? ej.gym_sets.map(formatoSerie).join('  ·  ') : '—'}

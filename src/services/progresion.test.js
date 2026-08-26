@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sesionesDeEjercicio, sugerirProximo, detectarEstancamiento, INCREMENTO_KG, sugerirDeload, progresionDe } from './progresion'
+import { sesionesDeEjercicio, sugerirProximo, detectarEstancamiento, INCREMENTO_KG, sugerirDeload, progresionDe, pesoParaSembrar } from './progresion'
 
 // Helper: una fila de gym_exercises con la forma que devuelve Supabase.
 function fila(date, series) {
@@ -252,6 +252,28 @@ describe('sugerirDeload', () => {
   it('devuelve null si el peso es tan bajo que el deload no baja nada', () => {
     // 2.5 × 0.9 = 2.25 → redondeo abajo a 2.5 da 0
     expect(sugerirDeload([sesionConSeries('2026-08-20', [{ weight_kg: 2.5, reps: 8, rir: 0 }])])).toBeNull()
+  })
+})
+
+describe('pesoParaSembrar', () => {
+  it('usa la sugerencia cuando trae weight_kg', () => {
+    const r = pesoParaSembrar({ weight_kg: 82.5, reps: 8 }, { weight_kg: 60, reps: 10 })
+    expect(r).toEqual({ weight_kg: 82.5, reps: 8 })
+  })
+
+  it('cae en los defaults con accion sin_rir (weight_kg null)', () => {
+    const r = pesoParaSembrar({ accion: 'sin_rir', weight_kg: null, reps: null }, { weight_kg: 60, reps: 10 })
+    expect(r).toEqual({ weight_kg: 60, reps: 10 })
+  })
+
+  it('cae en los defaults sin sugerencia (ejercicio sin historial)', () => {
+    const r = pesoParaSembrar(undefined, { weight_kg: 60, reps: 10 })
+    expect(r).toEqual({ weight_kg: 60, reps: 10 })
+  })
+
+  it('devuelve null si tampoco hay defaults', () => {
+    const r = pesoParaSembrar(undefined, undefined)
+    expect(r).toEqual({ weight_kg: null, reps: null })
   })
 })
 

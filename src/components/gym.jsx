@@ -22,14 +22,10 @@ export function TabButton({ active, onClick, children }) {
 
 export function BadgePR({ mejora }) {
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: '4px',
-      fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px',
-      background: C.yellowDim, color: C.yellow, border: `1px solid ${C.yellow}40`,
-    }}>
+    <Chip color={C.yellow} dim={C.yellowDim} weight={700}>
       <IconTrophy size={11} color={C.yellow} />
       PR +{mejora.toFixed(1)} kg
-    </span>
+    </Chip>
   )
 }
 
@@ -94,12 +90,12 @@ export function ModalSecondaryButton({ onClick, children }) {
   return <button onClick={onClick} style={style} {...handlers}>{children}</button>
 }
 
-// Base visual compartida con BadgePR: píldora chica, fondo xxxDim, borde al 40%.
-function Chip({ color, dim, borde = true, children }) {
+// Base visual de píldora chica compartida por BadgePR y los chips de progresión.
+function Chip({ color, dim, borde = true, weight = 600, children }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: '4px',
-      fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px',
+      fontSize: '11px', fontWeight: weight, padding: '3px 10px', borderRadius: '20px',
       background: dim, color, border: borde ? `1px solid ${color}40` : `1px solid ${C.border}`,
     }}>
       {children}
@@ -133,6 +129,21 @@ export function ChipProgresion({ sugerencia }) {
     <Chip color={C.textMuted} dim={C.surfaceHigh} borde={false}>
       {sugerencia.weight_kg} kg × {sugerencia.reps} · {sugerencia.motivo}
     </Chip>
+  )
+}
+
+// Agrupa sugerencia + estancamiento, los dos chips que van juntos en la lista
+// de ejercicios (mobile y desktop): evita repetir la misma condición y el
+// mismo layout en cada lugar donde se muestran.
+export function ChipsDeProgresion({ progresion }) {
+  if (!progresion) return null
+  return (
+    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+      <ChipProgresion sugerencia={progresion.sugerencia} />
+      {progresion.estancamiento.estancado && (
+        <ChipEstancado sesionesSinPR={progresion.estancamiento.sesionesSinPR} />
+      )}
+    </div>
   )
 }
 
