@@ -76,3 +76,45 @@ verificación no se limitó a los tests automatizados: las tareas de UI (5, 6, 7
 se validaron manualmente contra la base de producción real vía automatización de
 navegador, y las migraciones (4, 10) se verificaron contra la base real de Supabase
 antes y después de aplicarlas.
+
+## Spec 2 — Motor de progresión (2026-08-26)
+
+- **Doble progresión por RIR** sobre progresión lineal, por rango de reps o por % de 1RM:
+  aprovecha un dato que ya se registra en `gym_sets`, es el estándar en hipertrofia y no
+  necesita schema nuevo. El rango de reps habría requerido agregar columnas a
+  `routine_templates`; el % de 1RM arrastra el error de Epley a la prescripción.
+- **RIR mínimo de la sesión, no el de la última serie.** Con series `RIR 0, 2, 3` el mínimo
+  manda mantener y la última mandaría subir. Al prescribir carga, equivocarse hacia abajo
+  cuesta mucho menos que hacia arriba.
+- **RIR 0 mantiene el peso, no lo baja.** Llegar al fallo es una sesión dura, no un
+  estancamiento. Bajar carga entra por una sola vía, el deload, y siempre con confirmación.
+- **Incremento fijo de 2.5 kg**, sin configuración por ejercicio: es el disco chico estándar
+  y el salto sostenible sesión a sesión. Una columna `incremento_kg` en `routine_templates`
+  habría sumado migración y UI para un caso que se resuelve editando el número a mano.
+- **Estancamiento = 3 sesiones desde el récord.** Una sola definición, testeable. Un empate
+  no resetea el contador: se toma la primera sesión que alcanzó el máximo, coherente con la
+  decisión del Spec 1 de que empatar no es PR.
+- **El deload se ofrece pero nunca se siembra solo**, y no se re-ofrece si la última sesión
+  ya bajó el peso. Sin eso el chip reaparecería hasta lograr un PR nuevo y se volvería ruido.
+- **El deload se calcula sobre `pesoMaximo`, no sobre la mejor serie por 1RM**: se razona en
+  kilos sobre la barra, no en 1RM estimado. El redondeo va hacia abajo para que el alivio
+  sea real.
+- **`progresion.js` separado de `oneRepMax.js`**: aritmética de 1RM y reglas de entrenamiento
+  son dos responsabilidades con motivos de cambio distintos.
+- **Spec 2 sin cambios de schema.** Una sola query alimenta PR, sugerencia y estancamiento.
+
+### Decisiones surgidas al escribir el roadmap
+
+- **"Serie efectiva" también exige `reps`.** El spec la definía como `weight_kg > 0` y `rir`
+  no nulo, pero la sugerencia se expresa como peso × reps: sin `reps` no hay nada que
+  sugerir. Una serie con peso y RIR pero sin reps se trata como no efectiva.
+- **`accion: 'sin_rir'` en vez de `null`.** El spec pedía "sin sugerencia" para los tres
+  casos sin datos, pero la UI necesita distinguir "no puedo sugerir" (ejercicio nuevo, sin
+  peso) de "me falta el dato que vos podés cargar". `sin_rir` viaja con `weight_kg: null`,
+  así que `cargarPlantilla()` igual cae en los defaults.
+
+### Decisiones surgidas durante la ejecución del roadmap (2026-08-26)
+
+- **`esEfectiva()` en `sugerirProximo` exige `reps > 0`, no solo `reps` finito (Tarea 2).** El código literal que traía el brief usaba `Number.isFinite(Number(serie.reps))`, pero con eso `Number(null) === 0` y `Number.isFinite(0) === true`, así que una serie `{weight_kg:80, reps:null, rir:2}` pasaría como efectiva y el propio test del brief ("trata una serie con peso y RIR pero sin reps como no efectiva") fallaría. Se corrigió a `reps > 0`. Como efecto secundario, una serie con `reps: 0` (que no debería poder cargarse desde la UI de todos modos) tampoco cuenta como efectiva.
+- **Patrón recurrente: los comentarios de "por qué" del código de ejemplo en el roadmap no sobrevivieron a la primera pasada de implementación en varias tareas (2 y 4), y el reporte de esas tareas afirmó incorrectamente que sí se habían conservado.** Se corrigió en cada caso restaurando el comentario puntual señalado por la revisión (por qué RIR 0 ≠ RIR ausente en la Tarea 2; por qué se usa `pesoMaximo` y no 1RM estimado, por qué el redondeo es hacia abajo, por qué no se re-ofrece el deload en curso, y por qué el deload solo se calcula ante estancamiento, en la Tarea 4). Vale la pena tenerlo en cuenta para roadmaps futuros: verificar el diff real contra lo que el reporte afirma, no confiar en la narrativa del reporte.
+- **Verificación visual manual en navegador no se pudo ejecutar durante las Tareas 5 a 8** porque el entorno de los implementadores no tenía herramientas de navegador disponibles. Los pasos de verificación manual del roadmap (recorrer pestañas, abrir el modal, probar los casos de RIR/estancamiento/deload con datos de sesiones pasadas, confirmar en SQL que `routine_templates` no cambió) quedaron pendientes para una pasada final antes de dar el spec por cerrado, en vez de ejecutarse tarea por tarea como preveía el roadmap original.

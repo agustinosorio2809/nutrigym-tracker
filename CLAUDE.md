@@ -47,9 +47,13 @@ src/
     Viandas.jsx            # Inventario de viandas con ajuste de porciones
     Gimnasio.jsx           # Sesiones de gym + historial
     Perfil.jsx             # Datos fisicos, dias de entrenamiento, config notificaciones
+  components/
+    gym.jsx                # Componentes de presentación de la pantalla de Gimnasio
   services/
     geminiPlan.js          # Llama a /api/gemini (proxy) para generar plan semanal
     notifications.js       # Programacion de notificaciones locales (Capacitor)
+    progresion.js          # Motor de progresión: sugerencia de peso, estancamiento, deload
+    oneRepMax.js           # Epley 1RM estimate, best set, PR detection
 supabase/
   migrations/              # Migraciones SQL del schema (incluyendo RLS policies)
 .github/

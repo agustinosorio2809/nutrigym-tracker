@@ -13,6 +13,7 @@ A full-stack progressive web app for tracking nutrition and gym routines, with A
 - **Viandas inventory** — track your prepared meal containers (viandas) and portion counts
 - **Gym routines** — structured workout sessions organized by muscle group with weight/reps history
 - **Estimated 1RM & PR detection** — per-exercise one-rep-max estimate (Epley) and automatic personal-record detection from set history
+- **Automatic weight progression** — smart load suggestion via double-progression (RIR feedback), plateau detection, and deload offers
 - **Local notifications** — configurable meal-time reminders (Android)
 - **Body recomposition focus** — nutrition and training designed around fat loss + muscle maintenance
 - **Dark mode UI** — clean interface with bottom navigation
