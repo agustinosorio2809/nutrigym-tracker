@@ -92,6 +92,8 @@ export const FACTOR_DELOAD = 0.9
 
 const ESCALON_KG = 2.5
 
+// Baja un 10% redondeando hacia abajo al múltiplo de 2.5. Se basa en pesoMaximo
+// y no en la mejor serie por 1RM: el deload se razona en kilos sobre la barra.
 export function sugerirDeload(sesiones) {
   const ultima = sesiones?.[0]
   if (!ultima) return null
@@ -101,19 +103,24 @@ export function sugerirDeload(sesiones) {
 
   const anterior = sesiones[1]
   const pesoAnterior = anterior ? pesoMaximo(anterior.series || []) : null
+  // Si ya venís bajando, el deload está en curso: re-ofrecerlo sería ruido.
   if (pesoAnterior !== null && pesoUltima < pesoAnterior) return null
 
+  // Redondeo hacia abajo para que el alivio sea real y no cosmético.
   const weight_kg = Math.floor((pesoUltima * FACTOR_DELOAD) / ESCALON_KG) * ESCALON_KG
   if (weight_kg <= 0 || weight_kg >= pesoUltima) return null
   return { weight_kg }
 }
 
+// Única función que consume la UI. Recibe las filas crudas de gym_exercises de un
+// mismo ejercicio y devuelve todo lo que hay que mostrar.
 export function progresionDe(filas) {
   const sesiones = sesionesDeEjercicio(filas)
   const estancamiento = detectarEstancamiento(sesiones)
   return {
     sugerencia: sugerirProximo(sesiones),
     estancamiento,
+    // El deload solo tiene sentido como respuesta a un estancamiento.
     deload: estancamiento.estancado ? sugerirDeload(sesiones) : null,
   }
 }
