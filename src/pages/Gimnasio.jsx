@@ -155,17 +155,21 @@ export default function Gimnasio({ session }) {
       .select()
     if (errorCreados) { alert('No se pudo cargar la plantilla. Reintentá.'); setCargandoPlantilla(false); return }
 
-    // default_sets de la plantilla define cuántas series se siembran.
+    // default_sets de la plantilla define cuántas series se siembran; el peso y las
+    // reps salen del motor de progresión cuando hay sugerencia. Con accion 'sin_rir'
+    // el weight_kg viene en null, así que cae en los defaults de la plantilla.
     const filas = []
     creados?.forEach((ej, i) => {
       const p = plantilla[i]
+      const sugerencia = progresiones[normalizarNombre(p.exercise_name)]?.sugerencia
+      const usarSugerencia = sugerencia?.weight_kg != null
       const cantidad = Math.max(p.default_sets || 1, 1)
       for (let n = 1; n <= cantidad; n++) {
         filas.push({
           exercise_id: ej.id,
           set_number: n,
-          weight_kg: p.default_weight_kg ?? null,
-          reps: p.default_reps ?? null,
+          weight_kg: usarSugerencia ? sugerencia.weight_kg : (p.default_weight_kg ?? null),
+          reps: usarSugerencia ? sugerencia.reps : (p.default_reps ?? null),
           rir: null,
         })
       }
