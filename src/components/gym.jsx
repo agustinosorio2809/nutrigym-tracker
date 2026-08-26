@@ -5,7 +5,7 @@
 
 import { C } from '../theme'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
-import { IconTrophy, IconWarning, IconTrendingUp } from './icons'
+import { IconTrophy, IconWarning, IconTrendingUp, IconTrendingDown } from './icons'
 
 export function TabButton({ active, onClick, children }) {
   const { style, handlers } = useInteractiveStyle(
@@ -141,6 +141,18 @@ export function ChipEstancado({ sesionesSinPR }) {
     <Chip color={C.red} dim={C.redDim}>
       <IconWarning size={11} color={C.red} />
       {sesionesSinPR} sesiones sin PR
+    </Chip>
+  )
+}
+
+// Único chip con acción: es la única sugerencia que baja la carga, y bajar en
+// silencio no es lo esperable de un plan de progresión.
+export function ChipDeload({ weight_kg, onAplicar }) {
+  return (
+    <Chip color={C.yellow} dim={C.yellowDim}>
+      <IconTrendingDown size={11} color={C.yellow} />
+      Probar deload: {weight_kg} kg
+      <TinyGhostButton onClick={onAplicar}>aplicar</TinyGhostButton>
     </Chip>
   )
 }

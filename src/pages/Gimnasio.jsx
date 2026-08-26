@@ -7,7 +7,7 @@ import { progresionDe } from '../services/progresion'
 import {
   TabButton, BadgePR, Pill, PrimarySmallButton, ActionButton,
   TinyGhostButton, TinyDangerButton, ModalPrimaryButton, ModalSecondaryButton,
-  ChipProgresion, ChipEstancado,
+  ChipProgresion, ChipEstancado, ChipDeload,
 } from '../components/gym'
 
 const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
@@ -268,6 +268,12 @@ export default function Gimnasio({ session }) {
     setFormEj(f => ({ ...f, series: f.series.filter((_, idx) => idx !== i) }))
   }
 
+  // Reescribe el peso de todas las series del formulario. No guarda: el usuario
+  // sigue pudiendo editar o cancelar.
+  function aplicarPesoATodasLasSeries(weight_kg) {
+    setFormEj(f => ({ ...f, series: f.series.map(s => ({ ...s, weight_kg: String(weight_kg) })) }))
+  }
+
   const inp = {
     display: 'block', width: '100%', padding: '10px 12px', margin: '6px 0 14px',
     border: `1px solid ${C.border}`, borderRadius: '8px', boxSizing: 'border-box',
@@ -494,6 +500,15 @@ export default function Gimnasio({ session }) {
 
             <label style={{ fontSize: '12px', color: C.textMuted }}>Ejercicio</label>
             <input value={formEj.exercise_name} onChange={e => setFormEj({ ...formEj, exercise_name: e.target.value })} style={inp} placeholder="Ej: Sentadilla con barra" />
+
+            {modalEj !== 'nuevo' && progresionDeEj(modalEj)?.deload && (
+              <div style={{ marginBottom: '12px' }}>
+                <ChipDeload
+                  weight_kg={progresionDeEj(modalEj).deload.weight_kg}
+                  onAplicar={() => aplicarPesoATodasLasSeries(progresionDeEj(modalEj).deload.weight_kg)}
+                />
+              </div>
+            )}
 
             <div style={{ fontSize: '12px', color: C.textMuted, marginBottom: '6px' }}>Series</div>
 
