@@ -24,6 +24,8 @@ export function sesionesDeEjercicio(filas) {
 export const INCREMENTO_KG = 2.5
 export const RIR_PARA_SUBIR = 2
 
+// RIR 0 es un valor válido y significativo (fallo muscular): hay que distinguirlo
+// de "no cargué el dato" para evitar que alguien "simplifique" esto con `Number(x) || null`.
 function rirDe(serie) {
   const { rir } = serie
   if (rir === null || rir === undefined || rir === '') return null
