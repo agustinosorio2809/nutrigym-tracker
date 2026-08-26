@@ -86,3 +86,6 @@ export function IconBall(p) {
 export function IconRobot(p) {
   return <Svg {...p}><rect x="5" y="8" width="14" height="11" rx="2" /><line x1="12" y1="4" x2="12" y2="8" /><circle cx="12" cy="3" r="1" /><line x1="9" y1="13" x2="9" y2="15" /><line x1="15" y1="13" x2="15" y2="15" /><line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" /></Svg>
 }
+export function IconTrophy(p) {
+  return <Svg {...p}><path d="M7 4h10v5a5 5 0 0 1-10 0V4z" /><path d="M7 6H4v2a3 3 0 0 0 3 3" /><path d="M17 6h3v2a3 3 0 0 1-3 3" /><line x1="12" y1="14" x2="12" y2="18" /><path d="M8 21h8" /><path d="M10 18h4v3h-4z" /></Svg>
+}

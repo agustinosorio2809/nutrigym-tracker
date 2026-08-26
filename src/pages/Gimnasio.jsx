@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { C } from '../theme'
-import { IconPlan, IconTrash, IconGym, IconCheck, IconClose } from '../components/icons'
+import { IconPlan, IconTrash, IconGym, IconCheck, IconClose, IconTrophy } from '../components/icons'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
-import { mejorSerie } from '../services/oneRepMax'
+import { mejorSerie, detectarPR, normalizarNombre } from '../services/oneRepMax'
 
 const RUTINAS = ['Pecho + Tríceps + Core', 'Espalda + Bíceps + Core', 'Hombros + Espalda + Core + Piernas', 'Partido Futsal', 'Cardio', 'Otra']
 const SERIE_VACIA = { weight_kg: '', reps: '', rir: '' }
@@ -57,11 +57,36 @@ export default function Gimnasio({ session }) {
   const [saving, setSaving] = useState(false)
   const [modalEj, setModalEj] = useState(null)
   const [cargandoPlantilla, setCargandoPlantilla] = useState(false)
+  const [historicoPR, setHistoricoPR] = useState({})
   const isMobile = useIsMobile()
 
   const hoy = new Date().toLocaleDateString('sv-SE')
 
-  useEffect(() => { cargarHoy(); cargarHistorial() }, [])
+  useEffect(() => { cargarHoy(); cargarHistorial(); cargarHistoricoPR() }, [])
+
+  // Mejor 1RM histórico por ejercicio (nombre normalizado → { serie, unaRM }),
+  // excluyendo la sesión de hoy: si no, el récord de hoy se compararía consigo mismo.
+  async function cargarHistoricoPR() {
+    const { data } = await supabase
+      .from('gym_exercises')
+      .select('exercise_name, gym_sets(weight_kg, reps), gym_logs!inner(user_id, date)')
+      .eq('gym_logs.user_id', session.user.id)
+      .neq('gym_logs.date', hoy)
+
+    const mapa = {}
+    for (const ej of data || []) {
+      const clave = normalizarNombre(ej.exercise_name)
+      const mejor = mejorSerie(ej.gym_sets || [])
+      if (!mejor) continue
+      if (!mapa[clave] || mejor.unaRM > mapa[clave].unaRM) mapa[clave] = mejor
+    }
+    setHistoricoPR(mapa)
+  }
+
+  // Compara el mejor 1RM de hoy para este ejercicio contra el histórico previo.
+  function prDe(ej) {
+    return detectarPR(mejorSerie(ej.gym_sets || []), historicoPR[normalizarNombre(ej.exercise_name)])
+  }
 
   async function cargarHoy() {
     const { data: s } = await supabase.from('gym_logs').select('*').eq('user_id', session.user.id).eq('date', hoy)
@@ -136,7 +161,7 @@ export default function Gimnasio({ session }) {
     })
     if (filas.length) await supabase.from('gym_sets').insert(filas)
 
-    await cargarHoy(); setCargandoPlantilla(false)
+    await cargarHoy(); await cargarHistoricoPR(); setCargandoPlantilla(false)
   }
 
   async function limpiarEjercicios() {
@@ -171,7 +196,7 @@ export default function Gimnasio({ session }) {
     }))
     if (filas.length) await supabase.from('gym_sets').insert(filas)
 
-    await cargarHoy(); await cargarHistorial(); setSaving(false); setModalEj(null)
+    await cargarHoy(); await cargarHistorial(); await cargarHistoricoPR(); setSaving(false); setModalEj(null)
   }
 
   async function eliminarEjercicio(id) {
@@ -302,7 +327,10 @@ export default function Gimnasio({ session }) {
                   {ejercicios.map(ej => (
                     <div key={ej.id} style={{ padding: '14px 4px', borderBottom: `1px solid ${C.border}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                        <div style={{ fontWeight: 600, fontSize: '14px', color: C.textPrimary }}>{ej.exercise_name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, fontSize: '14px', color: C.textPrimary }}>{ej.exercise_name}</span>
+                          {prDe(ej).esPR && <BadgePR mejora={prDe(ej).mejora} />}
+                        </div>
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <TinyGhostButton onClick={() => abrirEditarEj(ej)}>Editar</TinyGhostButton>
                           <TinyDangerButton onClick={() => eliminarEjercicio(ej.id)}><IconClose size={11} /></TinyDangerButton>
@@ -340,7 +368,12 @@ export default function Gimnasio({ session }) {
                     <tbody>
                       {ejercicios.map((ej, i) => (
                         <tr key={ej.id} style={{ borderBottom: i < ejercicios.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                          <td style={{ padding: '12px 14px', fontWeight: 600, color: C.textPrimary }}>{ej.exercise_name}</td>
+                          <td style={{ padding: '12px 14px', fontWeight: 600, color: C.textPrimary }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <span>{ej.exercise_name}</span>
+                              {prDe(ej).esPR && <BadgePR mejora={prDe(ej).mejora} />}
+                            </div>
+                          </td>
                           <td style={{ padding: '12px 14px', color: C.textSecondary, fontVariantNumeric: 'tabular-nums' }}>
                             {ej.gym_sets?.length > 0 ? ej.gym_sets.map(formatoSerie).join('  ·  ') : '—'}
                           </td>
@@ -459,6 +492,19 @@ export default function Gimnasio({ session }) {
         </div>
       )}
     </div>
+  )
+}
+
+function BadgePR({ mejora }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '4px',
+      fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px',
+      background: C.yellowDim, color: C.yellow, border: `1px solid ${C.yellow}40`,
+    }}>
+      <IconTrophy size={11} color={C.yellow} />
+      PR +{mejora.toFixed(1)} kg
+    </span>
   )
 }
 
