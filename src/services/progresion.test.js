@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sesionesDeEjercicio, sugerirProximo, detectarEstancamiento, INCREMENTO_KG } from './progresion'
+import { sesionesDeEjercicio, sugerirProximo, detectarEstancamiento, INCREMENTO_KG, sugerirDeload, progresionDe } from './progresion'
 
 // Helper: una fila de gym_exercises con la forma que devuelve Supabase.
 function fila(date, series) {
@@ -199,5 +199,87 @@ describe('detectarEstancamiento', () => {
   it('devuelve no estancado sin sesiones', () => {
     expect(detectarEstancamiento([]).estancado).toBe(false)
     expect(detectarEstancamiento(undefined).estancado).toBe(false)
+  })
+})
+
+// Sesión con series reales, que es lo que mira el deload (usa pesoMaximo).
+function sesionConSeries(date, series) {
+  return { date, series, mejor: null }
+}
+
+describe('sugerirDeload', () => {
+  it('baja un 10% redondeando hacia abajo a 2.5', () => {
+    const r = sugerirDeload([sesionConSeries('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 0 }])])
+    expect(r.weight_kg).toBe(90)
+  })
+
+  it('redondea hacia abajo cuando no da un múltiplo exacto', () => {
+    // 82.5 × 0.9 = 74.25 → 72.5
+    const r = sugerirDeload([sesionConSeries('2026-08-20', [{ weight_kg: 82.5, reps: 8, rir: 0 }])])
+    expect(r.weight_kg).toBe(72.5)
+  })
+
+  it('usa el peso máximo de la sesión, no el de la mejor serie por 1RM', () => {
+    // 90×1 pesa más; 80×8 tiene mayor 1RM estimado. El deload mira los kilos.
+    const r = sugerirDeload([sesionConSeries('2026-08-20', [
+      { weight_kg: 80, reps: 8, rir: 0 },
+      { weight_kg: 90, reps: 1, rir: 0 },
+    ])])
+    expect(r.weight_kg).toBe(80)   // 90 × 0.9 = 81 → 80
+  })
+
+  it('no se re-ofrece si la última sesión ya bajó el peso', () => {
+    const r = sugerirDeload([
+      sesionConSeries('2026-08-20', [{ weight_kg: 90, reps: 8, rir: 2 }]),
+      sesionConSeries('2026-08-13', [{ weight_kg: 100, reps: 8, rir: 0 }]),
+    ])
+    expect(r).toBeNull()
+  })
+
+  it('sí se ofrece si la última sesión mantuvo el peso', () => {
+    const r = sugerirDeload([
+      sesionConSeries('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 0 }]),
+      sesionConSeries('2026-08-13', [{ weight_kg: 100, reps: 8, rir: 0 }]),
+    ])
+    expect(r.weight_kg).toBe(90)
+  })
+
+  it('devuelve null sin sesiones o sin peso', () => {
+    expect(sugerirDeload([])).toBeNull()
+    expect(sugerirDeload([sesionConSeries('2026-08-20', [{ weight_kg: null, reps: 20, rir: 0 }])])).toBeNull()
+  })
+
+  it('devuelve null si el peso es tan bajo que el deload no baja nada', () => {
+    // 2.5 × 0.9 = 2.25 → redondeo abajo a 2.5 da 0
+    expect(sugerirDeload([sesionConSeries('2026-08-20', [{ weight_kg: 2.5, reps: 8, rir: 0 }])])).toBeNull()
+  })
+})
+
+describe('progresionDe', () => {
+  it('compone sugerencia, estancamiento y deload desde las filas crudas', () => {
+    const filas = [
+      fila('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 3 }]),
+      fila('2026-08-13', [{ weight_kg: 100, reps: 7, rir: 1 }]),
+      fila('2026-08-06', [{ weight_kg: 100, reps: 7, rir: 1 }]),
+      fila('2026-07-30', [{ weight_kg: 100, reps: 9, rir: 0 }]),   // récord
+    ]
+    const r = progresionDe(filas)
+    expect(r.sugerencia.accion).toBe('subir')
+    expect(r.sugerencia.weight_kg).toBe(102.5)
+    expect(r.estancamiento.estancado).toBe(true)
+    expect(r.deload.weight_kg).toBe(90)
+  })
+
+  it('no calcula deload si no hay estancamiento', () => {
+    const filas = [fila('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 3 }])]
+    const r = progresionDe(filas)
+    expect(r.estancamiento.estancado).toBe(false)
+    expect(r.deload).toBeNull()
+  })
+
+  it('devuelve sugerencia null para un ejercicio sin historial', () => {
+    const r = progresionDe([])
+    expect(r.sugerencia).toBeNull()
+    expect(r.deload).toBeNull()
   })
 })

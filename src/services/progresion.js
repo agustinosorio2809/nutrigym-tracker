@@ -3,7 +3,7 @@
 // estancó y cuándo conviene un deload. Funciones puras: sin Supabase, sin React.
 // Ver spec en docs/superpowers/specs/2026-08-26-gym-motor-progresion-design.md
 
-import { mejorSerie } from './oneRepMax'
+import { mejorSerie, pesoMaximo } from './oneRepMax'
 
 // Las fechas vienen como 'YYYY-MM-DD', así que el orden lexicográfico es el
 // orden cronológico.
@@ -86,4 +86,34 @@ export function detectarEstancamiento(sesiones) {
 
   const sesionesSinPR = indiceRecord
   return { estancado: sesionesSinPR >= SESIONES_PARA_ESTANCAMIENTO, sesionesSinPR }
+}
+
+export const FACTOR_DELOAD = 0.9
+
+const ESCALON_KG = 2.5
+
+export function sugerirDeload(sesiones) {
+  const ultima = sesiones?.[0]
+  if (!ultima) return null
+
+  const pesoUltima = pesoMaximo(ultima.series || [])
+  if (!pesoUltima) return null
+
+  const anterior = sesiones[1]
+  const pesoAnterior = anterior ? pesoMaximo(anterior.series || []) : null
+  if (pesoAnterior !== null && pesoUltima < pesoAnterior) return null
+
+  const weight_kg = Math.floor((pesoUltima * FACTOR_DELOAD) / ESCALON_KG) * ESCALON_KG
+  if (weight_kg <= 0 || weight_kg >= pesoUltima) return null
+  return { weight_kg }
+}
+
+export function progresionDe(filas) {
+  const sesiones = sesionesDeEjercicio(filas)
+  const estancamiento = detectarEstancamiento(sesiones)
+  return {
+    sugerencia: sugerirProximo(sesiones),
+    estancamiento,
+    deload: estancamiento.estancado ? sugerirDeload(sesiones) : null,
+  }
 }
