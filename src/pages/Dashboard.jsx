@@ -130,7 +130,6 @@ export default function Dashboard({ session }) {
   const [semanaReporte, setSemanaReporte] = useState(getLunes(new Date()))
   const [adherenciaSemanal, setAdherenciaSemanal] = useState(null)
   const [loadingReporte, setLoadingReporte] = useState(false)
-  const [excepcionesFrecuentes, setExcepcionesFrecuentes] = useState([])
   const [viandasResumen, setViandasResumen] = useState([])
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState('')
   const [ejerciciosDisponibles, setEjerciciosDisponibles] = useState([])
@@ -171,7 +170,6 @@ export default function Dashboard({ session }) {
   async function cargarReportes() {
     setLoadingReporte(true)
     if (reporteVista === 'adherencia') await cargarAdherencia()
-    if (reporteVista === 'excepciones') await cargarExcepciones()
     if (reporteVista === 'viandas') await cargarViandas()
     if (reporteVista === 'cargas') await cargarEjercicios()
     setLoadingReporte(false)
@@ -196,20 +194,6 @@ export default function Dashboard({ session }) {
     const totalCumplidas = logsData?.filter(l => l.status === 'cumplida' || l.status === 'con_cambios').length || 0
     const totalComidas = meals.length
     setAdherenciaSemanal({ porDia, totalCumplidas, totalComidas, pct: totalComidas > 0 ? Math.round((totalCumplidas / totalComidas) * 100) : 0 })
-  }
-
-  async function cargarExcepciones() {
-    const desde = new Date(semanaReporte); desde.setDate(desde.getDate() - 21)
-    const { data: planes } = await supabase.from('meal_plans').select('*').eq('user_id', session.user.id).gte('week_start', formatFecha(desde)).lte('week_start', formatFecha(semanaReporte))
-    if (!planes?.length) { setExcepcionesFrecuentes([]); return }
-    const ids = planes.map(p => p.id)
-    const { data: meals } = await supabase.from('planned_meals').select('*').in('plan_id', ids)
-    if (!meals?.length) { setExcepcionesFrecuentes([]); return }
-    const mealIds = meals.map(m => m.id)
-    const { data: logsData } = await supabase.from('meal_logs').select('*').in('planned_meal_id', mealIds).not('exception_type', 'is', null)
-    const conteo = {}
-    logsData?.forEach(l => { if (l.exception_type) conteo[l.exception_type] = (conteo[l.exception_type] || 0) + 1 })
-    setExcepcionesFrecuentes(Object.entries(conteo).map(([nombre, cantidad]) => ({ nombre, cantidad })).sort((a, b) => b.cantidad - a.cantidad))
   }
 
   async function cargarViandas() {
@@ -563,19 +547,20 @@ export default function Dashboard({ session }) {
   )
 }
 
+function NavBtn({ onClick, children }) {
+  const { style, handlers } = useInteractiveStyle(
+    { padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', cursor: 'pointer', background: C.surface, color: C.textSecondary },
+    { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
 function WeekNav({ label, onPrev, onNext }) {
-  const btn = (onClick, children) => {
-    const { style, handlers } = useInteractiveStyle(
-      { padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', cursor: 'pointer', background: C.surface, color: C.textSecondary },
-      { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
-    )
-    return <button onClick={onClick} style={style} {...handlers}>{children}</button>
-  }
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
-      {btn(onPrev, '←')}
+      <NavBtn onClick={onPrev}>←</NavBtn>
       <span style={{ fontWeight: 500, fontSize: '13px', color: C.textSecondary }}>{label}</span>
-      {btn(onNext, '→')}
+      <NavBtn onClick={onNext}>→</NavBtn>
     </div>
   )
 }

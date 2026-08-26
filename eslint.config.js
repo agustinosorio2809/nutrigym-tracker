@@ -23,7 +23,22 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // varsIgnorePattern solo cubre declaraciones var/let/const de nivel superior.
+      // argsIgnorePattern hace falta aparte para params desestructurados (ej: un
+      // componente Icon recibido por prop y usado solo como tag JSX <Icon />) —
+      // sin esto, no-unused-vars no reconoce el uso como tag y lo marca sin usar.
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]' }],
+      // El codebase declara los handlers de useEffect como function declarations
+      // (hoisted) más abajo en el archivo, a propósito. react-hooks/immutability
+      // (pensada para React Compiler) los marca como acceso antes de declarar,
+      // pero funcionan bien en runtime por el hoisting.
+      'react-hooks/immutability': 'off',
+    },
+  },
+  {
+    files: ['api/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
     },
   },
 ])

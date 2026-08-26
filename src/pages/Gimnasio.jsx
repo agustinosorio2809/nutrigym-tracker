@@ -291,8 +291,12 @@ export default function Gimnasio({ session }) {
         <TabButton active={vista === 'historial'} onClick={() => setVista('historial')}>Historial</TabButton>
       </div>
 
+      {loading && (
+        <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>Cargando…</div>
+      )}
+
       {/* ══ HOY ══ */}
-      {vista === 'hoy' && (
+      {!loading && vista === 'hoy' && (
         <div>
           <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '1rem' }}>Entrenamiento de hoy</div>
 
@@ -445,7 +449,7 @@ export default function Gimnasio({ session }) {
       )}
 
       {/* ══ HISTORIAL ══ */}
-      {vista === 'historial' && (
+      {!loading && vista === 'historial' && (
         <div>
           <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '1rem' }}>Historial</div>
           {sesiones.length === 0 ? (

@@ -282,7 +282,7 @@ export default function PlanSemanal({ session }) {
     if (!planAnterior) { alert('No hay plan en la semana anterior.'); return }
     const { data: comidasAnt } = await supabase.from('planned_meals').select('*').eq('plan_id', planAnterior.id)
     if (!comidasAnt?.length) { alert('La semana anterior no tiene comidas cargadas.'); return }
-    await supabase.from('planned_meals').insert(comidasAnt.map(({ id, plan_id, ...rest }) => ({ ...rest, plan_id: planId })))
+    await supabase.from('planned_meals').insert(comidasAnt.map(({ id: _id, plan_id: _plan_id, ...rest }) => ({ ...rest, plan_id: planId })))
     await cargarSemana()
   }
 

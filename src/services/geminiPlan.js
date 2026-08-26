@@ -1,7 +1,7 @@
 // src/services/geminiPlan.js
 // Servicio para generar el plan semanal con Gemini
 
-export async function generarPlanSemanal({ perfil, viandas, diaPartido, fechaSemana, accessToken }) {
+export async function generarPlanSemanal({ perfil, viandas, diaPartido, fechaSemana: _fechaSemana, accessToken }) {
 
   const stockViandas = viandas.length > 0
     ? viandas.map(v => `• ${v.name}${v.protein_source ? ` (${v.protein_source})` : ''}${v.category ? ` [${v.category}]` : ''} — ${v.portions} porción${v.portions !== 1 ? 'es' : ''}`).join('\n')
