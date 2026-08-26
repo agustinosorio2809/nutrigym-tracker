@@ -30,7 +30,7 @@ A full-stack progressive web app for tracking nutrition and gym routines, with A
 | Mobile | Capacitor (Android APK) |
 | AI | Google Gemini 2.5 Flash Lite |
 | Charts | Recharts |
-| Excel import | SheetJS (xlsx) |
+| Excel import | ExcelJS |
 | CI/CD | GitHub Actions |
 
 ---
@@ -50,6 +50,17 @@ nutrigym-tracker/
 ├── android/              # Capacitor Android project
 └── .github/workflows/    # GitHub Actions (APK build)
 ```
+
+---
+
+## Design system
+
+Rediseño anti-slop completo (2026-08-25). `design.md` en la raíz documenta el sistema
+de diseño (paleta, tipografía, iconografía, tratamiento de contenedores, estados
+hover/focus/active). Tokens de color compartidos en `src/theme.js`, set único de
+íconos SVG en `src/components/icons.jsx`, interactividad (hover/focus/active) vía
+`src/hooks/useInteractiveStyle.js` — necesario porque el proyecto es 100% estilos
+inline, sin CSS externo.
 
 ---
 
