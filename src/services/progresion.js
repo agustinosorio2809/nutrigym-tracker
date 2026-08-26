@@ -33,6 +33,12 @@ function rirDe(serie) {
   return Number.isFinite(n) ? n : null
 }
 
+// La sugerencia se expresa como peso × reps y se decide por RIR, así que sin
+// las tres (weight_kg, reps, rir) no hay nada válido que sugerir.
+// Se exige `reps > 0` en vez de solo `Number.isFinite(reps)` para que una serie
+// con `reps: null` (Number(null) === 0) no cuente como efectiva; sin este chequeo,
+// esa serie colaría y rompería el caso 'sin_rir' cuando falta la cantidad de reps.
+// Ver DECISIONS.md, sección "Spec 2 — Motor de progresión".
 function esEfectiva(serie) {
   const reps = Number(serie.reps)
   return Number(serie.weight_kg) > 0
@@ -45,6 +51,8 @@ export function sugerirProximo(sesiones) {
   if (!ultima) return null
 
   const conPeso = (ultima.series || []).filter(s => Number(s.weight_kg) > 0)
+  // Sin ninguna serie con peso no hay nada que progresar: cubre ejercicios sin
+  // peso, como futsal, cardio o trabajo a peso corporal.
   if (!conPeso.length) return null
 
   const efectivas = conPeso.filter(esEfectiva)
@@ -52,6 +60,8 @@ export function sugerirProximo(sesiones) {
     return { accion: 'sin_rir', weight_kg: null, reps: null, motivo: 'cargá el RIR para recibir sugerencias' }
   }
 
+  // Se toma el RIR mínimo de la sesión (la serie más dura), no el de la última
+  // serie: es la lectura conservadora del esfuerzo real.
   let ref = efectivas[0]
   for (const s of efectivas) if (rirDe(s) < rirDe(ref)) ref = s
 
@@ -65,6 +75,8 @@ export function sugerirProximo(sesiones) {
   if (rir === 1) {
     return { accion: 'sumar_reps', weight_kg: peso, reps: reps + 1, motivo: 'RIR 1, sumá una rep' }
   }
+  // RIR 0 es una sesión dura, no un estancamiento: consolidar el mismo peso es
+  // la respuesta correcta. Bajar carga entra solo por la vía del deload.
   return { accion: 'mantener', weight_kg: peso, reps, motivo: 'llegaste al fallo' }
 }
 

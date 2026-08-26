@@ -161,7 +161,7 @@ export default function Gimnasio({ session }) {
     const filas = []
     creados?.forEach((ej, i) => {
       const p = plantilla[i]
-      const sugerencia = progresiones[normalizarNombre(p.exercise_name)]?.sugerencia
+      const sugerencia = progresiones[normalizarNombre(ej.exercise_name)]?.sugerencia
       const usarSugerencia = sugerencia?.weight_kg != null
       const cantidad = Math.max(p.default_sets || 1, 1)
       for (let n = 1; n <= cantidad; n++) {
