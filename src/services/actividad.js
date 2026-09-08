@@ -94,3 +94,53 @@ export function nivelDeIntensidad(series, referencia) {
   if (proporcion > 0.25) return 2
   return 1
 }
+
+const MS_POR_DIA = 86400000
+
+// Las semanas arrancan el lunes, igual que week_start en meal_plans. Se usa mediodía UTC
+// para que el cambio de huso horario no corra la fecha un día.
+export function lunesDe(fecha) {
+  const d = new Date(fecha + 'T12:00:00Z')
+  const diaSemana = (d.getUTCDay() + 6) % 7   // 0 = lunes
+  return new Date(d.getTime() - diaSemana * MS_POR_DIA).toISOString().slice(0, 10)
+}
+
+// Las rachas se miden en semanas y no en días: con una rutina de 3 días, una racha de
+// días calendario consecutivos se cortaría cada martes y no significaría nada.
+export function rachas(dias, diasEntreno, hoy) {
+  if (!Array.isArray(dias) || !dias.length) return { actual: 0, maxima: 0 }
+
+  const porSemana = new Map()
+  for (const d of dias) {
+    const semana = lunesDe(d.date)
+    porSemana.set(semana, (porSemana.get(semana) || 0) + 1)
+  }
+
+  const semanaActual = lunesDe(hoy)
+  const semanas = [...porSemana.keys()].sort()
+  const primera = semanas[0]
+
+  // Se recorre semana a semana incluyendo las vacías, que son las que cortan la racha.
+  const cumplidas = []
+  for (let s = primera; s < semanaActual; s = siguienteSemana(s)) {
+    cumplidas.push((porSemana.get(s) || 0) >= diasEntreno)
+  }
+
+  let maxima = 0
+  let corriendo = 0
+  for (const cumple of cumplidas) {
+    corriendo = cumple ? corriendo + 1 : 0
+    if (corriendo > maxima) maxima = corriendo
+  }
+
+  // La semana en curso no se evalúa: todavía faltan días para completarla.
+  let actual = 0
+  for (let i = cumplidas.length - 1; i >= 0 && cumplidas[i]; i--) actual++
+
+  return { actual, maxima }
+}
+
+function siguienteSemana(lunes) {
+  return new Date(new Date(lunes + 'T12:00:00Z').getTime() + 7 * MS_POR_DIA)
+    .toISOString().slice(0, 10)
+}

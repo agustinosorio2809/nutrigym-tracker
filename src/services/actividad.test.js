@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { actividadPorDia, volumenPorGrupo, nivelDeIntensidad, NIVEL_SIN_SERIES } from './actividad'
+import { actividadPorDia, volumenPorGrupo, nivelDeIntensidad, NIVEL_SIN_SERIES, rachas, lunesDe } from './actividad'
 
 const log = (id, date, routine_type) => ({ id, date, routine_type, completed: true })
 const ej = (log_id, exercise_name, series) => ({
@@ -128,5 +128,63 @@ describe('nivelDeIntensidad', () => {
 
   it('no explota si la referencia es 0', () => {
     expect(nivelDeIntensidad(0, 0)).toBe(0)
+  })
+})
+
+describe('rachas', () => {
+  // Semanas de lunes a domingo. 2026-09-07 es lunes.
+  const dia = date => ({ date })
+
+  it('cuenta como cumplida la semana que alcanza dias_entreno', () => {
+    const dias = [dia('2026-08-31'), dia('2026-09-02'), dia('2026-09-04')]
+    expect(rachas(dias, 3, '2026-09-10').actual).toBe(1)
+  })
+
+  it('no cuenta la semana que no llega al mínimo', () => {
+    const dias = [dia('2026-08-31'), dia('2026-09-02')]
+    expect(rachas(dias, 3, '2026-09-10').actual).toBe(0)
+  })
+
+  it('la semana en curso no corta la racha aunque esté incompleta', () => {
+    // Semana pasada completa; la actual (del 7) tiene una sola sesión y todavía corre.
+    const dias = [
+      dia('2026-08-31'), dia('2026-09-02'), dia('2026-09-04'),
+      dia('2026-09-07'),
+    ]
+    expect(rachas(dias, 3, '2026-09-08').actual).toBe(1)
+  })
+
+  it('una semana floja corta la racha', () => {
+    const dias = [
+      dia('2026-08-17'), dia('2026-08-19'), dia('2026-08-21'),
+      dia('2026-08-24'),
+      dia('2026-08-31'), dia('2026-09-02'), dia('2026-09-04'),
+    ]
+    expect(rachas(dias, 3, '2026-09-10').actual).toBe(1)
+  })
+
+  it('la racha máxima mira todo el historial, no solo el final', () => {
+    const dias = [
+      dia('2026-08-03'), dia('2026-08-05'), dia('2026-08-07'),
+      dia('2026-08-10'), dia('2026-08-12'), dia('2026-08-14'),
+      dia('2026-08-24'),
+    ]
+    expect(rachas(dias, 3, '2026-09-10').maxima).toBe(2)
+  })
+
+  it('devuelve ceros sin días', () => {
+    expect(rachas([], 3, '2026-09-10')).toEqual({ actual: 0, maxima: 0 })
+    expect(rachas(null, 3, '2026-09-10')).toEqual({ actual: 0, maxima: 0 })
+  })
+})
+
+describe('lunesDe', () => {
+  it('devuelve el lunes de la semana de una fecha', () => {
+    expect(lunesDe('2026-09-10')).toBe('2026-09-07')
+    expect(lunesDe('2026-09-07')).toBe('2026-09-07')
+  })
+
+  it('trata el domingo como fin de esa semana, no como inicio de la siguiente', () => {
+    expect(lunesDe('2026-09-13')).toBe('2026-09-07')
   })
 })
