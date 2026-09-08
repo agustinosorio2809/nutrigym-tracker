@@ -23,6 +23,12 @@ jobs:
 
       - name: Build web app
         run: npm run build
+        # Sin estas variables Vite compila el bundle con `undefined` y la app
+        # queda en pantalla blanca dentro del APK. No vienen de .env: esta
+        # gitignoreado y nunca llega al runner.
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_KEY: ${{ secrets.VITE_SUPABASE_KEY }}
 
       - name: Setup Java
         uses: actions/setup-java@v3
