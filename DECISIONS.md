@@ -255,3 +255,27 @@ plantillas sembradas y no entrenadas. Los datos muestran que esa inferencia es f
 este usuario: hay entrenamientos completos de 32 series sin un solo RIR. `detectarEstancamiento`
 y `sugerirDeload` deberían pasar a usar `completed` —el mismo criterio que adopta el Spec 3—
 en vez de inferir por RIR, lo que implica sumar `completed` a la query de `Gimnasio.jsx`.
+
+## Motor de progresión: `completed` en vez de inferir por RIR (2026-09-08)
+
+Al recuperar sesiones sin marcar (ver sección anterior) se confirmó que el criterio
+introducido esa misma mañana para `detectarEstancamiento` y `sugerirDeload` ("ninguna
+serie con RIR" = "sesión sembrada y no entrenada") era falso para este usuario: entrena
+seguido sin cargar el RIR porque completa todas las repeticiones previstas de cada serie,
+y varias de sus sesiones reales de 24-33 series no tenían un solo RIR cargado. Ese criterio
+las estaba descartando del conteo de estancamiento.
+
+Se reemplazó por `completed` — el mismo campo de `gym_logs` que ya usa el toggle "Sesión
+completada" de `Gimnasio.jsx`, y el mismo criterio que adopta el Spec 3 para el heatmap de
+actividad. Es un dato explícito del usuario en vez de una inferencia sobre otro dato.
+
+- `sesionesDeEjercicio()` ahora conserva `completed` desde `gym_logs`, junto a `date`.
+- `fueEntrenada()` pasó a ser `sesion.completed === true`, sin mirar las series.
+- La query de `cargarHistorico()` en `Gimnasio.jsx` suma `completed` al `select` de
+  `gym_logs!inner`.
+- Los helpers de test (`sesionConRM`, `sesionSembrada`, `sesionConSeries`) pasaron a
+  aceptar `completed` como parámetro en vez de expresar "no entrenada" con `rir: null`.
+
+Verificado en el navegador: la sesión del 2026-09-07 (32 series, ningún RIR cargado)
+aparece "Completado" en el Historial y la query a `gym_exercises` trae `completed` en el
+`select` — antes de este fix, esa sesión no contaba como entrenada para el motor.

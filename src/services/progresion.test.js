@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { sesionesDeEjercicio, sugerirProximo, detectarEstancamiento, INCREMENTO_KG, sugerirDeload, progresionDe, pesoParaSembrar } from './progresion'
 
 // Helper: una fila de gym_exercises con la forma que devuelve Supabase.
-function fila(date, series) {
-  return { exercise_name: 'Press banca', gym_sets: series, gym_logs: { date } }
+// completed viaja en gym_logs, no en la serie: es el dato explicito del usuario
+// (el toggle de Gimnasio.jsx), no algo que se infiera del RIR cargado.
+function fila(date, series, completed = true) {
+  return { exercise_name: 'Press banca', gym_sets: series, gym_logs: { date, completed } }
 }
 
 describe('sesionesDeEjercicio', () => {
@@ -48,6 +50,11 @@ describe('sesionesDeEjercicio', () => {
   it('deja mejor en null si ninguna serie es estimable', () => {
     const r = sesionesDeEjercicio([fila('2026-08-01', [{ weight_kg: null, reps: 30, rir: 0 }])])
     expect(r[0].mejor).toBeNull()
+  })
+
+  it('conserva el completed de la sesion, que es lo que define si se entreno', () => {
+    const r = sesionesDeEjercicio([fila('2026-08-01', [{ weight_kg: 80, reps: 8, rir: null }], false)])
+    expect(r[0].completed).toBe(false)
   })
 })
 
@@ -134,16 +141,16 @@ describe('sugerirProximo', () => {
   })
 })
 
-// Una sesión entrenada: sus series traen el RIR cargado.
-function sesionConRM(date, unaRM) {
+// Una sesión entrenada: completed = true, el dato explícito del usuario.
+function sesionConRM(date, unaRM, completed = true) {
   const series = [{ weight_kg: 100, reps: 5, rir: 2 }]
-  return { date, series, mejor: unaRM === null ? null : { serie: {}, unaRM } }
+  return { date, series, completed, mejor: unaRM === null ? null : { serie: {}, unaRM } }
 }
 
 // Una sesión que cargarPlantilla() sembró y nadie entrenó: series con peso y
-// reps, pero ninguna con RIR.
+// reps, pero completed en false porque nunca se marcó la sesión como hecha.
 function sesionSembrada(date) {
-  return { date, series: [{ weight_kg: 100, reps: 8, rir: null }], mejor: { serie: {}, unaRM: 100 } }
+  return { date, series: [{ weight_kg: 100, reps: 8, rir: null }], completed: false, mejor: { serie: {}, unaRM: 100 } }
 }
 
 describe('detectarEstancamiento', () => {
@@ -217,9 +224,12 @@ describe('detectarEstancamiento', () => {
     expect(r.sesionesSinPR).toBe(0)
   })
 
-  it('cuenta la sesión si al menos una serie tiene RIR', () => {
+  it('cuenta la sesión si esta completada, sin importar si cargo el RIR', () => {
+    // El usuario entrena seguido sin anotar el RIR porque completa todas las
+    // repeticiones previstas: inferir "no entrenada" del RIR ausente descartaba
+    // sesiones reales suyas. completed es el dato que el usuario marca a mano.
     const r = detectarEstancamiento([
-      { date: '2026-08-27', series: [{ weight_kg: 100, reps: 8, rir: null }, { weight_kg: 100, reps: 8, rir: 2 }], mejor: { serie: {}, unaRM: 100 } },
+      { date: '2026-08-27', series: [{ weight_kg: 100, reps: 8, rir: null }], completed: true, mejor: { serie: {}, unaRM: 100 } },
       sesionConRM('2026-08-20', 100),
       sesionConRM('2026-08-13', 98),
       sesionConRM('2026-08-06', 102),
@@ -235,8 +245,8 @@ describe('detectarEstancamiento', () => {
 })
 
 // Sesión con series reales, que es lo que mira el deload (usa pesoMaximo).
-function sesionConSeries(date, series) {
-  return { date, series, mejor: null }
+function sesionConSeries(date, series, completed = true) {
+  return { date, series, completed, mejor: null }
 }
 
 describe('sugerirDeload', () => {
@@ -277,10 +287,10 @@ describe('sugerirDeload', () => {
   })
 
   it('se calcula sobre la última sesión entrenada, no sobre una sembrada', () => {
-    // La plantilla sembró 120 kg para hoy y todavía no se entrenó: el deload
-    // tiene que partir de los 100 kg que sí se levantaron.
+    // La plantilla sembró 120 kg para hoy y todavía no se entrenó (completed:
+    // false): el deload tiene que partir de los 100 kg que sí se levantaron.
     const r = sugerirDeload([
-      sesionConSeries('2026-08-27', [{ weight_kg: 120, reps: 8, rir: null }]),
+      sesionConSeries('2026-08-27', [{ weight_kg: 120, reps: 8, rir: null }], false),
       sesionConSeries('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 0 }]),
     ])
     expect(r.weight_kg).toBe(90)

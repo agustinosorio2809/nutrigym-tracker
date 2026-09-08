@@ -14,10 +14,13 @@ export function sesionesDeEjercicio(filas) {
     const date = fila?.gym_logs?.date
     const series = fila?.gym_sets || []
     if (!date || !series.length) continue
-    porFecha.set(date, [...(porFecha.get(date) || []), ...series])
+    const previo = porFecha.get(date) || { series: [] }
+    // completed viaja en gym_logs, no por serie: todas las filas de una misma
+    // fecha pertenecen a la misma sesion, asi que comparten el mismo valor.
+    porFecha.set(date, { series: [...previo.series, ...series], completed: fila?.gym_logs?.completed })
   }
   return [...porFecha.entries()]
-    .map(([date, series]) => ({ date, series, mejor: mejorSerie(series) }))
+    .map(([date, { series, completed }]) => ({ date, series, completed, mejor: mejorSerie(series) }))
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
 }
 
@@ -82,11 +85,13 @@ export function sugerirProximo(sesiones) {
 
 export const SESIONES_PARA_ESTANCAMIENTO = 3
 
-// cargarPlantilla() siembra series reales en gym_sets con rir null. Una sesión
-// donde ninguna serie tiene RIR no llegó a entrenarse, y contarla inflaría el
-// estancamiento hasta ofrecer un deload sobre pesos que nadie levantó.
+// completed es el dato explícito que el usuario marca con el toggle de
+// Gimnasio.jsx. Se prefiere sobre inferir "se entrenó" por la presencia de RIR:
+// el usuario suele completar todas las repeticiones previstas sin cargar el
+// RIR, así que "ninguna serie con RIR" no implica que la sesión sea una
+// plantilla sembrada y nunca entrenada.
 function fueEntrenada(sesion) {
-  return (sesion.series || []).some(s => rirDe(s) !== null)
+  return sesion.completed === true
 }
 
 export function detectarEstancamiento(sesiones) {

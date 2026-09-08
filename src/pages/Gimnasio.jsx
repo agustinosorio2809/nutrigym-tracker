@@ -63,7 +63,7 @@ export default function Gimnasio({ session }) {
   async function cargarHistorico() {
     const { data } = await supabase
       .from('gym_exercises')
-      .select('exercise_name, gym_sets(weight_kg, reps, rir), gym_logs!inner(user_id, date)')
+      .select('exercise_name, gym_sets(weight_kg, reps, rir), gym_logs!inner(user_id, date, completed)')
       .eq('gym_logs.user_id', session.user.id)
       .neq('gym_logs.date', hoy)
 
