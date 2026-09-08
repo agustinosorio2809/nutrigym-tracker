@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
-import { supabase } from './supabase'
+import { supabase, faltaConfiguracion } from './supabase'
 import Dashboard from './pages/Dashboard'
 import PlanSemanal from './pages/PlanSemanal'
 import Viandas from './pages/Viandas'
@@ -363,10 +363,35 @@ function AppLayout({ session, onLogout }) {
   )
 }
 
+function ConfiguracionFaltante() {
+  return (
+    <div style={{
+      minHeight: '100vh', background: C.bg,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '1.5rem', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    }}>
+      <div style={{
+        maxWidth: '420px', background: C.surface, border: `1px solid ${C.border}`,
+        borderRadius: '10px', padding: '1.5rem',
+      }}>
+        <h1 style={{ color: C.textPrimary, fontSize: '1.125rem', fontWeight: 700, margin: '0 0 12px' }}>
+          Falta la configuración de Supabase
+        </h1>
+        <p style={{ color: C.textSecondary, fontSize: '0.875rem', lineHeight: 1.6, margin: 0 }}>
+          Esta versión se compiló sin <code>VITE_SUPABASE_URL</code> y <code>VITE_SUPABASE_KEY</code>,
+          así que no puede conectarse a la base. Si es el APK, revisá que los secrets estén
+          cargados en GitHub Actions y volvé a generarlo.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [session, setSession] = useState(null)
 
   useEffect(() => {
+    if (faltaConfiguracion) return
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session) {
@@ -381,6 +406,7 @@ function App() {
     await supabase.auth.signOut()
   }
 
+  if (faltaConfiguracion) return <ConfiguracionFaltante />
   if (!session) return <AuthScreen />
 
   return (
