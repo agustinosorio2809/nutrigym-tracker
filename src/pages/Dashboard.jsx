@@ -7,6 +7,7 @@ import { mejorSerie, pesoMaximo, normalizarNombre, agruparNombresDeEjercicio } f
 import { actividadPorDia, rachas } from '../services/actividad'
 import { C, ESTADO_COLORS } from '../theme'
 import { IconSunrise, IconSun, IconApple, IconMoon, IconGym, IconPlan, IconWarning, IconDownload, IconMeal } from '../components/icons'
+import { ResumenActividad, TiraAnual } from '../components/actividad'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
 
 const SLOTS = ['desayuno', 'almuerzo', 'merienda', 'cena']
@@ -138,9 +139,10 @@ export default function Dashboard({ session }) {
   const [sesionGymHoy, setSesionGymHoy] = useState(null)
   const [actividad, setActividad] = useState([])
   const [diasEntreno, setDiasEntreno] = useState(3)
-  // mesActividad y diaSeleccionado (calendario mensual, click en día) se agregan en la
-  // Tarea 9 junto al componente que los consume: declararlos sin uso acá rompe el gate
-  // de 0 errores de lint (no-unused-vars).
+  const [mesActividad, setMesActividad] = useState(() => new Date().toISOString().slice(0, 7))
+  // diaSeleccionado (calendario mensual, click en día) se agrega en la Tarea 10 junto al
+  // componente que lo consume: declararlo sin uso acá rompe el gate de 0 errores de lint
+  // (no-unused-vars).
 
   const hoyDate = new Date()
   const hoy = hoyDate.toLocaleDateString('sv-SE')
@@ -565,6 +567,7 @@ export default function Dashboard({ session }) {
                       sesiones={actividad.length}
                       rachas={rachas(actividad, diasEntreno, new Date().toISOString().slice(0, 10))}
                     />
+                    <TiraAnual dias={actividad} mesSeleccionado={mesActividad} onSeleccionarMes={setMesActividad} />
                   </div>
                 )
               )}
@@ -654,16 +657,4 @@ function ModalSecondaryButton({ onClick, children }) {
     { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
   )
   return <button onClick={onClick} style={style} {...handlers}>{children}</button>
-}
-
-// Provisorio: la Tarea 9 lo muda a src/components/actividad.jsx junto al calendario y
-// el mapa muscular. Acá solo van los tres números — tratamiento nº 2 de design.md.
-function ResumenActividad({ sesiones, rachas }) {
-  return (
-    <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-      <Stat value={sesiones} label="Sesiones completadas" sub="Último año" />
-      <Stat value={rachas.actual} label="Racha actual" sub="semanas seguidas" color={rachas.actual > 0 ? C.accent : undefined} />
-      <Stat value={rachas.maxima} label="Racha máxima" sub="semanas seguidas" />
-    </div>
-  )
 }
