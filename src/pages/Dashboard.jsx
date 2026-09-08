@@ -4,10 +4,10 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContai
 import ExcelJS from 'exceljs'
 import { Link } from 'react-router-dom'
 import { mejorSerie, pesoMaximo, normalizarNombre, agruparNombresDeEjercicio } from '../services/oneRepMax'
-import { actividadPorDia, rachas } from '../services/actividad'
+import { actividadPorDia, rachas, volumenPorGrupo } from '../services/actividad'
 import { C, ESTADO_COLORS } from '../theme'
 import { IconSunrise, IconSun, IconApple, IconMoon, IconGym, IconPlan, IconWarning, IconDownload, IconMeal } from '../components/icons'
-import { ResumenActividad, TiraAnual, MesDetalle, PanelDia } from '../components/actividad'
+import { ResumenActividad, TiraAnual, MesDetalle, PanelDia, BarrasPorGrupo } from '../components/actividad'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
 
 const SLOTS = ['desayuno', 'almuerzo', 'merienda', 'cena']
@@ -554,8 +554,10 @@ export default function Dashboard({ session }) {
                 )
               )}
 
-              {reporteVista === 'actividad' && (
-                actividad.length === 0 ? (
+              {reporteVista === 'actividad' && (() => {
+                const diasDelMes = actividad.filter(d => d.date.startsWith(mesActividad))
+
+                return actividad.length === 0 ? (
                   <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>
                     No hay sesiones completadas en el último año.
                   </div>
@@ -565,7 +567,7 @@ export default function Dashboard({ session }) {
                       sesiones={actividad.length}
                       rachas={rachas(actividad, diasEntreno, new Date().toISOString().slice(0, 10))}
                     />
-                    <TiraAnual dias={actividad} mesSeleccionado={mesActividad} onSeleccionarMes={setMesActividad} />
+                    <TiraAnual dias={actividad} onSeleccionarMes={setMesActividad} />
                     <MesDetalle
                       dias={actividad}
                       mes={mesActividad}
@@ -574,9 +576,10 @@ export default function Dashboard({ session }) {
                       onSeleccionarDia={setDiaSeleccionado}
                     />
                     <PanelDia dia={actividad.find(d => d.date === diaSeleccionado)} />
+                    <BarrasPorGrupo volumen={volumenPorGrupo(diasDelMes)} titulo="Volumen del mes" />
                   </div>
                 )
-              )}
+              })()}
             </>
           )}
         </div>

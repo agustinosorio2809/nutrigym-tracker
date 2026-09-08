@@ -198,6 +198,51 @@ export function MesDetalle({ dias, mes, onCambiarMes, diaSeleccionado, onSelecci
   )
 }
 
+export function BarrasPorGrupo({ volumen, titulo }) {
+  if (!volumen.length) {
+    return (
+      <div style={{ color: C.textMuted, fontSize: '13px', padding: '1rem 0' }}>
+        No hay series registradas en este período.
+      </div>
+    )
+  }
+
+  const mayor = volumen[0].series
+
+  return (
+    <div>
+      <div style={{
+        fontSize: '11px', fontWeight: 600, color: C.textMuted, marginBottom: '10px',
+        textTransform: 'uppercase', letterSpacing: '0.06em',
+      }}>{titulo}</div>
+
+      {volumen.map(({ grupo, series, porcentaje }) => (
+        <div key={grupo} style={{ marginBottom: '10px' }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+            marginBottom: '4px',
+          }}>
+            <span style={{ fontSize: '13px', color: C.textPrimary }}>{grupo}</span>
+            <span style={{
+              fontSize: '12px', color: C.textSecondary, fontVariantNumeric: 'tabular-nums',
+            }}>{series} series · {porcentaje}%</span>
+          </div>
+          <div style={{ height: '8px', background: C.surface, borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{
+              // Proporcional al mayor y no al total: con nueve grupos, escalar por el
+              // total dejaría todas las barras aplastadas contra la izquierda.
+              width: `${(series / mayor) * 100}%`,
+              height: '100%',
+              background: GRUPO_COLORS[grupo],
+              borderRadius: '4px',
+            }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function FlechaMes({ label, onClick }) {
   const { style, handlers } = useInteractiveStyle(
     {
