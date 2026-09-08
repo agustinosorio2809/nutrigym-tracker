@@ -49,8 +49,9 @@ nutrigym-tracker/
 │   ├── services/         # Pure logic + external APIs — no JSX, no hooks
 │   │   ├── geminiPlan.js       # Weekly plan generation via /api/gemini
 │   │   ├── notifications.js    # Local notification scheduling (Capacitor)
-│   │   └── oneRepMax.js        # Epley 1RM estimate, best set, PR detection
-│   ├── components/       # icons.jsx (shared SVG icon set)
+│   │   ├── oneRepMax.js        # Epley 1RM, best set, PR detection, exercise-name identity
+│   │   └── progresion.js       # Load suggestion (RIR double progression), plateau, deload
+│   ├── components/       # icons.jsx (shared SVG icon set), gym.jsx (Gimnasio presentation)
 │   ├── hooks/            # useInteractiveStyle.js (hover/focus/active — no CSS files)
 │   ├── theme.js          # Design tokens (colors, spacing)
 │   ├── App.jsx           # Auth, routing, nav

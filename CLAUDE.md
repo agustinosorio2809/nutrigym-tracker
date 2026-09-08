@@ -47,13 +47,17 @@ src/
     Viandas.jsx            # Inventario de viandas con ajuste de porciones
     Gimnasio.jsx           # Sesiones de gym + historial
     Perfil.jsx             # Datos fisicos, dias de entrenamiento, config notificaciones
+  theme.js                 # Tokens de color y espaciado (C, SPACE, ESTADO_COLORS)
   components/
     gym.jsx                # Componentes de presentación de la pantalla de Gimnasio
+    icons.jsx              # Set unico de iconos SVG dibujados a mano
+  hooks/
+    useInteractiveStyle.js # Hover/focus/active sin CSS (el proyecto es 100% inline)
   services/
     geminiPlan.js          # Llama a /api/gemini (proxy) para generar plan semanal
     notifications.js       # Programacion de notificaciones locales (Capacitor)
     progresion.js          # Motor de progresión: sugerencia de peso, estancamiento, deload
-    oneRepMax.js           # Epley 1RM estimate, best set, PR detection
+    oneRepMax.js           # Epley 1RM, mejor serie, PR, e identidad de ejercicios por nombre
 supabase/
   migrations/              # Migraciones SQL del schema (incluyendo RLS policies)
 .github/
@@ -87,6 +91,21 @@ Solo estos tres, exactos:
 - `'Equilibrado'`
 - `'Bajo En Grasa'`
 - `'Alto Proteico'`
+
+### Identidad de ejercicios: no hay catalogo
+
+`gym_exercises.exercise_name` es texto libre — no existe una tabla de ejercicios ni un
+`exercise_id`. Dos ejercicios son el mismo si su nombre **normalizado** coincide
+(`normalizarNombre()` en `oneRepMax.js`: trim, minusculas, espacios colapsados).
+
+**Toda vista que agrupe, cuente o compare ejercicios tiene que normalizar.** Comparar el
+nombre crudo — `new Set(...)`, `.eq('exercise_name', x)` — parte el historial en una
+entrada por grafia, y el sintoma es silencioso: no falla nada, simplemente faltan
+sesiones. Le paso al reporte de cargas del Dashboard, que uso el nombre crudo mientras
+`Gimnasio.jsx` ya normalizaba para los PR (ver `DECISIONS.md`, 2026-09-08).
+
+La normalizacion no resuelve sinonimos ("Press de banca" vs "Press banca"): eso se
+limpia con un `UPDATE` puntual sobre los datos, no con codigo.
 
 ### GOTCHA CRITICO: `auth.uid()` en el SQL Editor
 
