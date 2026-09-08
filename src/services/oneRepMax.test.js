@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { estimar1RM, MAX_REPS_ESTIMABLE, mejorSerie, pesoMaximo, normalizarNombre, detectarPR } from './oneRepMax'
+import { estimar1RM, MAX_REPS_ESTIMABLE, mejorSerie, pesoMaximo, normalizarNombre, agruparNombresDeEjercicio, detectarPR } from './oneRepMax'
 
 describe('estimar1RM', () => {
   it('con 1 repetición devuelve el peso exacto', () => {
@@ -97,6 +97,37 @@ describe('pesoMaximo', () => {
 
   it('devuelve null si no recibe un array', () => {
     expect(pesoMaximo(undefined)).toBeNull()
+  })
+})
+
+describe('agruparNombresDeEjercicio', () => {
+  it('junta en una sola entrada las variantes de mayúsculas y espacios', () => {
+    const r = agruparNombresDeEjercicio(['Press Banca', 'press banca', 'Press  Banca'])
+    expect(r).toHaveLength(1)
+    expect(r[0].clave).toBe('press banca')
+  })
+
+  it('muestra como etiqueta la grafía más frecuente', () => {
+    const r = agruparNombresDeEjercicio(['press banca', 'Press Banca', 'Press Banca'])
+    expect(r[0].etiqueta).toBe('Press Banca')
+  })
+
+  it('ante un empate de frecuencia usa la primera grafía que aparece', () => {
+    const r = agruparNombresDeEjercicio(['press banca', 'Press Banca'])
+    expect(r[0].etiqueta).toBe('press banca')
+  })
+
+  it('ordena las entradas alfabéticamente por etiqueta', () => {
+    const r = agruparNombresDeEjercicio(['Remo', 'Curl', 'Sentadilla'])
+    expect(r.map(e => e.etiqueta)).toEqual(['Curl', 'Remo', 'Sentadilla'])
+  })
+
+  it('descarta los nombres vacíos', () => {
+    expect(agruparNombresDeEjercicio(['  ', 'Remo', null])).toHaveLength(1)
+  })
+
+  it('devuelve lista vacía si no recibe un array', () => {
+    expect(agruparNombresDeEjercicio(undefined)).toEqual([])
   })
 })
 

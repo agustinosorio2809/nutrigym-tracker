@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import ExcelJS from 'exceljs'
 import { Link } from 'react-router-dom'
-import { mejorSerie, pesoMaximo } from '../services/oneRepMax'
+import { mejorSerie, pesoMaximo, normalizarNombre, agruparNombresDeEjercicio } from '../services/oneRepMax'
 import { C, ESTADO_COLORS } from '../theme'
 import { IconSunrise, IconSun, IconApple, IconMoon, IconGym, IconPlan, IconWarning, IconDownload, IconMeal } from '../components/icons'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
@@ -214,9 +214,9 @@ export default function Dashboard({ session }) {
     if (!todos?.length) { setEjerciciosDisponibles([]); return }
     const logIds = todos.map(l => l.id)
     const { data: ejercicios } = await supabase.from('gym_exercises').select('exercise_name').in('log_id', logIds)
-    const unicos = [...new Set(ejercicios?.map(e => e.exercise_name) || [])].sort()
-    setEjerciciosDisponibles(unicos)
-    if (unicos.length && !ejercicioSeleccionado) setEjercicioSeleccionado(unicos[0])
+    const grupos = agruparNombresDeEjercicio(ejercicios?.map(e => e.exercise_name) || [])
+    setEjerciciosDisponibles(grupos)
+    if (grupos.length && !ejercicioSeleccionado) setEjercicioSeleccionado(grupos[0].clave)
   }
 
   async function cargarEvolucion() {
@@ -225,13 +225,23 @@ export default function Dashboard({ session }) {
     const logIds = gymLogs.map(l => l.id)
     const { data: ejs } = await supabase
       .from('gym_exercises')
-      .select('log_id, gym_sets(weight_kg, reps)')
+      .select('exercise_name, log_id, gym_sets(weight_kg, reps)')
       .in('log_id', logIds)
-      .eq('exercise_name', ejercicioSeleccionado)
-    if (!ejs?.length) { setEvolucionCargas([]); return }
-    const evolucion = ejs.map(ej => {
+    // El filtro va acá y no como .eq() en la query: .eq() compara la cadena exacta,
+    // así que cada grafía del mismo ejercicio graficaba solo una parte del historial.
+    const delEjercicio = (ejs || []).filter(ej => normalizarNombre(ej.exercise_name) === ejercicioSeleccionado)
+    if (!delEjercicio.length) { setEvolucionCargas([]); return }
+
+    // Dos filas del mismo ejercicio en una misma sesión (dos grafías, o cargado en
+    // dos tandas) son un solo punto de la curva, no dos.
+    const porFecha = new Map()
+    for (const ej of delEjercicio) {
       const sesion = gymLogs.find(l => l.id === ej.log_id)
-      const gymSets = ej.gym_sets || []
+      if (!sesion) continue
+      porFecha.set(sesion.date, [...(porFecha.get(sesion.date) || []), ...(ej.gym_sets || [])])
+    }
+
+    const evolucion = [...porFecha.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([date, gymSets]) => {
       // kg es "cuánto pesé", no 1RM: usamos pesoMaximo para no perder sesiones
       // con series no estimables (reps null o > MAX_REPS_ESTIMABLE).
       const kg = pesoMaximo(gymSets)
@@ -239,7 +249,7 @@ export default function Dashboard({ session }) {
       // Reps de la serie de mayor 1RM si hay una; si no, de la serie con el peso máximo.
       const serieRef = mejor ? mejor.serie : gymSets.find(s => Number(s.weight_kg) === kg)
       return {
-        fecha: new Date(sesion.date + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }),
+        fecha: new Date(date + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }),
         kg: kg || 0,
         series: gymSets.length,
         reps: serieRef ? serieRef.reps : 0,
@@ -282,7 +292,10 @@ export default function Dashboard({ session }) {
       agregarHoja(wb, 'Viandas', viandasResumen.map(v => ({ Día: v.dia, Slot: v.slot, Descripción: v.descripcion })), [12, 12, 40])
     }
     if (evolucionCargas.length > 0) {
-      agregarHoja(wb, 'Cargas', evolucionCargas.map(e => ({ Fecha: e.fecha, Ejercicio: ejercicioSeleccionado, Series: e.series || '—', Reps: e.reps || '—', 'Peso (kg)': e.kg })), [12, 24, 8, 8, 10])
+      // ejercicioSeleccionado es la clave normalizada (minúsculas): al Excel va la
+      // grafía que el usuario ve en el desplegable.
+      const etiqueta = ejerciciosDisponibles.find(e => e.clave === ejercicioSeleccionado)?.etiqueta || ejercicioSeleccionado
+      agregarHoja(wb, 'Cargas', evolucionCargas.map(e => ({ Fecha: e.fecha, Ejercicio: etiqueta, Series: e.series || '—', Reps: e.reps || '—', 'Peso (kg)': e.kg })), [12, 24, 8, 8, 10])
     }
     const buffer = await wb.xlsx.writeBuffer()
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
@@ -465,7 +478,7 @@ export default function Dashboard({ session }) {
                       <label style={{ fontSize: '12px', color: C.textMuted, display: 'block', marginBottom: '6px' }}>Ejercicio</label>
                       <select value={ejercicioSeleccionado} onChange={e => setEjercicioSeleccionado(e.target.value)}
                         style={{ padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: '8px', fontSize: '14px', width: '100%', maxWidth: '320px', background: C.surface, color: C.textPrimary }}>
-                        {ejerciciosDisponibles.map(e => <option key={e} value={e}>{e}</option>)}
+                        {ejerciciosDisponibles.map(e => <option key={e.clave} value={e.clave}>{e.etiqueta}</option>)}
                       </select>
                     </div>
                     {evolucionCargas.length === 0 ? (

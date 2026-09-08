@@ -52,6 +52,34 @@ export function normalizarNombre(nombre) {
   return nombre.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+// Agrupa una lista de nombres crudos por su forma normalizada. La etiqueta es la
+// grafía más usada y no la normalizada, porque "press banca" en el desplegable se
+// lee como un error: el usuario reconoce la que él mismo escribe.
+export function agruparNombresDeEjercicio(nombres) {
+  if (!Array.isArray(nombres)) return []
+
+  const grupos = new Map()
+  for (const nombre of nombres) {
+    const clave = normalizarNombre(nombre)
+    if (!clave) continue
+    const grafias = grupos.get(clave) || new Map()
+    const grafia = nombre.trim()
+    grafias.set(grafia, (grafias.get(grafia) || 0) + 1)
+    grupos.set(clave, grafias)
+  }
+
+  return [...grupos.entries()]
+    .map(([clave, grafias]) => {
+      // Map conserva el orden de inserción, así que al comparar con > estricto
+      // un empate lo gana la primera grafía que apareció.
+      let etiqueta = ''
+      let max = 0
+      for (const [grafia, veces] of grafias) if (veces > max) { etiqueta = grafia; max = veces }
+      return { clave, etiqueta }
+    })
+    .sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, 'es'))
+}
+
 // PR se define por 1RM estimado: engloba tanto subir el peso como hacer más
 // reps con el mismo peso. La primera vez que se hace un ejercicio no es récord.
 export function detectarPR(mejorHoy, mejorPrevio) {
