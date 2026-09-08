@@ -182,3 +182,50 @@ Evaluado y descartado, con motivo:
 - **Actions actualizadas** (`checkout@v7`, `setup-node@v7`, `setup-java@v6`,
   `upload-artifact@v7`): venían en v3 y GitHub ya avisaba de la deprecación. Las versiones
   se verificaron contra la API de releases antes de fijarlas, no de memoria.
+
+## Unificación de nombres de ejercicios (2026-09-08)
+
+El reporte de cargas del Dashboard listaba el mismo ejercicio varias veces. Eran dos
+problemas distintos con soluciones distintas.
+
+**En el código** (`Dashboard.jsx`): el desplegable armaba la lista con `new Set()` sobre
+el nombre crudo y el gráfico filtraba con `.eq('exercise_name', ...)`, que compara la
+cadena exacta. Además de verse duplicado, cada grafía graficaba solo una parte del
+historial. Ahora se agrupa con `normalizarNombre()` — la misma que `Gimnasio.jsx` ya
+usaba para los PR, que el Dashboard nunca había adoptado — y el filtro pasó a memoria.
+La etiqueta del desplegable es la grafía más frecuente y no la normalizada: "press
+banca" en minúscula se lee como un error de la app.
+
+- Se descartó filtrar server-side con `.ilike`: no colapsa espacios internos.
+- Dos filas del mismo ejercicio en una misma sesión pasan a ser un punto de la curva y
+  no dos. El caso ya era posible antes; el filtro por nombre normalizado lo hace más
+  probable.
+
+**En los datos**: había además nomenclatura vieja ("Press Pecho", "Remo", "Bíceps
+(Barra)") de antes de la rutina actual, con 1-2 sesiones cada una. Se resolvió con un
+`UPDATE` puntual, no con código.
+
+- **Se descartó una tabla de alias o un catálogo de ejercicios**: complejidad permanente
+  en el schema para una limpieza histórica de ~15 filas que se hace una sola vez. Si
+  alguna vez se quiere autocompletado al cargar un ejercicio, eso es una feature con su
+  propio spec.
+- El criterio canónico salió de la rutina de gimnasio del usuario (30 ejercicios), no de
+  parecido entre cadenas. Los mapeos ambiguos ("Pectorales", "Remo", "Abdominales") los
+  resolvió él: `Pectorales` es la pectoral machine y NO el `Peck Deck`; `Crunch Inverso`
+  y `Dragon flag asistido` son distintos; los press militares de barra, máquina y
+  mancuerna son tres ejercicios.
+- `Press Militar` a secas resultó ser el de mancuernas, que no existía en la base: fue un
+  renombre a `Press militar con mancuernas`, no una fusión.
+- Un segundo `UPDATE` normalizó los espacios sobrantes. Hacía falta porque el primero
+  escribió literales limpios contra nombres existentes que tenían un espacio invisible,
+  lo que creó un duplicado nuevo (`Crunch Abdominal`) además de los dos que ya estaban
+  (`Chest Press Hammer`, `Pectorales`).
+- Ambos `UPDATE` filtran por el `user_id` literal del usuario. La base tiene dos cuentas
+  de prueba con una sesión cada una (2026-03-25 y 2026-06-01) que RLS ya aísla; el filtro
+  evita tocarlas. Nada de `auth.uid()`, que da `null` en el editor de Supabase.
+- Backup previo en la tabla `gym_exercises_backup_20260908`, dentro de la misma base.
+  Borrarla cuando se dé el cambio por bueno.
+
+**Efecto aceptado**: las sesiones renombradas entran al historial del ejercicio canónico,
+así que pueden mover un PR y con él la carga que sugiere el motor de progresión. Son 1-2
+sesiones por caso con cargas de otra época.
