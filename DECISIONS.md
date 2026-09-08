@@ -155,3 +155,30 @@ Evaluado y descartado, con motivo:
   componentes de dominio**: prematuro. CODESTYLE.md ya fija el criterio — compartir un
   componente entre páginas recién cuando se reusa en 3+ — y ninguno de los botones
   señalados llega a ese umbral todavía.
+
+## Mantenimiento (2026-09-08)
+
+- **Las sesiones sembradas por plantilla ya no cuentan para el estancamiento ni para el
+  deload.** Era la limitación conocida que el Spec 2 dejó documentada sin fix. Una sesión
+  se considera entrenada si al menos una de sus series tiene RIR cargado; `cargarPlantilla()`
+  siembra con `rir: null`, así que una plantilla cargada y no entrenada ya no es evidencia
+  de nada. Se filtra en `detectarEstancamiento` y también en `sugerirDeload`, porque el
+  síntoma tenía dos mitades: el chip rojo de "3 sesiones sin PR" y un deload calculado
+  sobre kilos que nadie levantó.
+  - Se descartó filtrar en `sugerirProximo`: ahí ver la sesión sembrada es correcto y
+    produce `accion: 'sin_rir'`, que es justo el aviso que corresponde.
+  - El criterio es "alguna serie con RIR", no "ninguna serie con RIR": una sesión donde se
+    entrenó parte de las series y se olvidó el RIR en el resto sigue contando.
+
+- **El APK de CI se compilaba sin las variables de Supabase desde `f228f6e` (2026-06-15).**
+  Ese commit sacó las claves hardcodeadas de `src/supabase.js` y las movió a
+  `import.meta.env`, cargándolas en `.env` y en Vercel pero no en GitHub Actions. Como
+  `createClient` lanza al importarse y `App.jsx` lo importa en el top-level, el APK quedó en
+  pantalla blanca durante 42 commits sin que ningún build fallara ni la web se viera
+  afectada. Se agregó la inyección desde repository secrets y, como red de seguridad, una
+  pantalla que nombra las variables faltantes en vez de morir en silencio. Ver la tabla de
+  los tres entornos en `CLAUDE.md`.
+
+- **Actions actualizadas** (`checkout@v7`, `setup-node@v7`, `setup-java@v6`,
+  `upload-artifact@v7`): venían en v3 y GitHub ya avisaba de la deprecación. Las versiones
+  se verificaron contra la API de releases antes de fijarlas, no de memoria.
