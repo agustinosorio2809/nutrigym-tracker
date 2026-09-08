@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { GRUPOS, grupoDe } from './musculos'
+import { GRUPOS, grupoDe, grupoDeRutina } from './musculos'
 
 describe('GRUPOS', () => {
   it('tiene los nueve grupos en el orden normativo', () => {
@@ -33,5 +33,22 @@ describe('grupoDe', () => {
   it('devuelve Sin clasificar ante un nombre vacío o no string', () => {
     expect(grupoDe('')).toBe('Sin clasificar')
     expect(grupoDe(null)).toBe('Sin clasificar')
+  })
+})
+
+describe('grupoDeRutina', () => {
+  it('mapea futsal y cardio al grupo Cardio', () => {
+    expect(grupoDeRutina('Partido Futsal')).toBe('Cardio')
+    expect(grupoDeRutina('Cardio')).toBe('Cardio')
+  })
+
+  it('manda a Sin clasificar los tipos sin grupo definido', () => {
+    expect(grupoDeRutina('Otra')).toBe('Sin clasificar')
+    expect(grupoDeRutina('')).toBe('Sin clasificar')
+    expect(grupoDeRutina(null)).toBe('Sin clasificar')
+  })
+
+  it('manda a Sin clasificar una rutina de gimnasio, que debería traer series', () => {
+    expect(grupoDeRutina('Pecho + Tríceps + Core')).toBe('Sin clasificar')
   })
 })

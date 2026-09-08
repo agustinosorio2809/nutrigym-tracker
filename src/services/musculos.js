@@ -86,3 +86,15 @@ export const MAPA = {
 export function grupoDe(nombre) {
   return MAPA[normalizarNombre(nombre)] || SIN_CLASIFICAR
 }
+
+const RUTINAS_SIN_SERIES = {
+  'partido futsal': 'Cardio',
+  'cardio': 'Cardio',
+}
+
+// Solo para dias sin ninguna serie cargada. Una rutina de gimnasio que llegue acá se
+// marco como completada sin cargar nada: Sin clasificar es la lectura correcta, no un
+// grupo inventado.
+export function grupoDeRutina(routineType) {
+  return RUTINAS_SIN_SERIES[normalizarNombre(routineType)] || SIN_CLASIFICAR
+}
