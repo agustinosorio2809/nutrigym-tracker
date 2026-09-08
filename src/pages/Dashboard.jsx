@@ -4,6 +4,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContai
 import ExcelJS from 'exceljs'
 import { Link } from 'react-router-dom'
 import { mejorSerie, pesoMaximo, normalizarNombre, agruparNombresDeEjercicio } from '../services/oneRepMax'
+import { actividadPorDia, rachas } from '../services/actividad'
 import { C, ESTADO_COLORS } from '../theme'
 import { IconSunrise, IconSun, IconApple, IconMoon, IconGym, IconPlan, IconWarning, IconDownload, IconMeal } from '../components/icons'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
@@ -135,6 +136,11 @@ export default function Dashboard({ session }) {
   const [ejerciciosDisponibles, setEjerciciosDisponibles] = useState([])
   const [evolucionCargas, setEvolucionCargas] = useState([])
   const [sesionGymHoy, setSesionGymHoy] = useState(null)
+  const [actividad, setActividad] = useState([])
+  const [diasEntreno, setDiasEntreno] = useState(3)
+  // mesActividad y diaSeleccionado (calendario mensual, click en día) se agregan en la
+  // Tarea 9 junto al componente que los consume: declararlos sin uso acá rompe el gate
+  // de 0 errores de lint (no-unused-vars).
 
   const hoyDate = new Date()
   const hoy = hoyDate.toLocaleDateString('sv-SE')
@@ -172,7 +178,41 @@ export default function Dashboard({ session }) {
     if (reporteVista === 'adherencia') await cargarAdherencia()
     if (reporteVista === 'viandas') await cargarViandas()
     if (reporteVista === 'cargas') await cargarEjercicios()
+    if (reporteVista === 'actividad') await cargarActividad()
     setLoadingReporte(false)
+  }
+
+  async function cargarActividad() {
+    const desde = new Date()
+    desde.setFullYear(desde.getFullYear() - 1)
+    const desdeStr = desde.toISOString().slice(0, 10)
+
+    // completed = true: cargarPlantilla() escribe series con rir null, así que una plantilla
+    // cargada y no entrenada pintaría el día como entrenado e inflaría la racha.
+    const { data: logs } = await supabase
+      .from('gym_logs')
+      .select('id, date, routine_type, completed')
+      .eq('user_id', session.user.id)
+      .eq('completed', true)
+      .gte('date', desdeStr)
+      .order('date')
+    if (!logs?.length) { setActividad([]); return }
+
+    // El rango va en la query y no en memoria: PostgREST corta en 1000 filas sin avisar, y
+    // el síntoma sería un calendario al que le faltan días en silencio.
+    const { data: ejs } = await supabase
+      .from('gym_exercises')
+      .select('exercise_name, log_id, gym_sets(id)')
+      .in('log_id', logs.map(l => l.id))
+
+    const { data: perfil } = await supabase
+      .from('user_profile')
+      .select('dias_entreno')
+      .eq('user_id', session.user.id)
+      .single()
+    if (perfil?.dias_entreno) setDiasEntreno(perfil.dias_entreno)
+
+    setActividad(actividadPorDia(logs, ejs || []))
   }
 
   async function cargarAdherencia() {
@@ -392,7 +432,7 @@ export default function Dashboard({ session }) {
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-            {[['adherencia', 'Adherencia'], ['viandas', 'Viandas'], ['cargas', 'Cargas']].map(([k, l]) => (
+            {[['adherencia', 'Adherencia'], ['viandas', 'Viandas'], ['cargas', 'Cargas'], ['actividad', 'Actividad']].map(([k, l]) => (
               <SubTabButton key={k} active={reporteVista === k} onClick={() => setReporteVista(k)}>{l}</SubTabButton>
             ))}
           </div>
@@ -513,6 +553,21 @@ export default function Dashboard({ session }) {
                   </div>
                 )
               )}
+
+              {reporteVista === 'actividad' && (
+                actividad.length === 0 ? (
+                  <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>
+                    No hay sesiones completadas en el último año.
+                  </div>
+                ) : (
+                  <div>
+                    <ResumenActividad
+                      sesiones={actividad.length}
+                      rachas={rachas(actividad, diasEntreno, new Date().toISOString().slice(0, 10))}
+                    />
+                  </div>
+                )
+              )}
             </>
           )}
         </div>
@@ -599,4 +654,16 @@ function ModalSecondaryButton({ onClick, children }) {
     { hover: { borderColor: C.textMuted, color: C.textPrimary }, focus: focusRing }
   )
   return <button onClick={onClick} style={style} {...handlers}>{children}</button>
+}
+
+// Provisorio: la Tarea 9 lo muda a src/components/actividad.jsx junto al calendario y
+// el mapa muscular. Acá solo van los tres números — tratamiento nº 2 de design.md.
+function ResumenActividad({ sesiones, rachas }) {
+  return (
+    <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+      <Stat value={sesiones} label="Sesiones completadas" sub="Último año" />
+      <Stat value={rachas.actual} label="Racha actual" sub="semanas seguidas" color={rachas.actual > 0 ? C.accent : undefined} />
+      <Stat value={rachas.maxima} label="Racha máxima" sub="semanas seguidas" />
+    </div>
+  )
 }
