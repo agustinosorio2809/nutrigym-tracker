@@ -82,8 +82,15 @@ export function sugerirProximo(sesiones) {
 
 export const SESIONES_PARA_ESTANCAMIENTO = 3
 
+// cargarPlantilla() siembra series reales en gym_sets con rir null. Una sesión
+// donde ninguna serie tiene RIR no llegó a entrenarse, y contarla inflaría el
+// estancamiento hasta ofrecer un deload sobre pesos que nadie levantó.
+function fueEntrenada(sesion) {
+  return (sesion.series || []).some(s => rirDe(s) !== null)
+}
+
 export function detectarEstancamiento(sesiones) {
-  const conMejor = (sesiones || []).filter(s => s?.mejor)
+  const conMejor = (sesiones || []).filter(s => s?.mejor && fueEntrenada(s))
   // Con menos de N+1 sesiones no hay evidencia suficiente de estancamiento.
   if (conMejor.length <= SESIONES_PARA_ESTANCAMIENTO) return { estancado: false, sesionesSinPR: 0 }
 
@@ -107,13 +114,16 @@ const ESCALON_KG = 2.5
 // Baja un 10% redondeando hacia abajo al múltiplo de 2.5. Se basa en pesoMaximo
 // y no en la mejor serie por 1RM: el deload se razona en kilos sobre la barra.
 export function sugerirDeload(sesiones) {
-  const ultima = sesiones?.[0]
+  // Solo las entrenadas: bajar un 10% de un peso que la plantilla sembró y
+  // nadie levantó daría un alivio calculado sobre una carga imaginaria.
+  const entrenadas = (sesiones || []).filter(fueEntrenada)
+  const ultima = entrenadas[0]
   if (!ultima) return null
 
   const pesoUltima = pesoMaximo(ultima.series || [])
   if (!pesoUltima) return null
 
-  const anterior = sesiones[1]
+  const anterior = entrenadas[1]
   const pesoAnterior = anterior ? pesoMaximo(anterior.series || []) : null
   // Si ya venís bajando, el deload está en curso: re-ofrecerlo sería ruido.
   if (pesoAnterior !== null && pesoUltima < pesoAnterior) return null

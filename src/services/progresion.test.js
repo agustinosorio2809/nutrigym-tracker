@@ -134,8 +134,16 @@ describe('sugerirProximo', () => {
   })
 })
 
+// Una sesión entrenada: sus series traen el RIR cargado.
 function sesionConRM(date, unaRM) {
-  return { date, series: [], mejor: unaRM === null ? null : { serie: {}, unaRM } }
+  const series = [{ weight_kg: 100, reps: 5, rir: 2 }]
+  return { date, series, mejor: unaRM === null ? null : { serie: {}, unaRM } }
+}
+
+// Una sesión que cargarPlantilla() sembró y nadie entrenó: series con peso y
+// reps, pero ninguna con RIR.
+function sesionSembrada(date) {
+  return { date, series: [{ weight_kg: 100, reps: 8, rir: null }], mejor: { serie: {}, unaRM: 100 } }
 }
 
 describe('detectarEstancamiento', () => {
@@ -196,6 +204,30 @@ describe('detectarEstancamiento', () => {
     expect(r.sesionesSinPR).toBe(3)
   })
 
+  it('ignora las sesiones sembradas por plantilla y nunca entrenadas', () => {
+    // cargarPlantilla() escribe series reales en gym_sets con rir null. Si se
+    // carga la plantilla y no se entrena, esas sesiones no son evidencia de nada.
+    const r = detectarEstancamiento([
+      sesionSembrada('2026-08-27'),
+      sesionSembrada('2026-08-26'),
+      sesionSembrada('2026-08-25'),
+      sesionConRM('2026-08-20', 102),
+    ])
+    expect(r.estancado).toBe(false)
+    expect(r.sesionesSinPR).toBe(0)
+  })
+
+  it('cuenta la sesión si al menos una serie tiene RIR', () => {
+    const r = detectarEstancamiento([
+      { date: '2026-08-27', series: [{ weight_kg: 100, reps: 8, rir: null }, { weight_kg: 100, reps: 8, rir: 2 }], mejor: { serie: {}, unaRM: 100 } },
+      sesionConRM('2026-08-20', 100),
+      sesionConRM('2026-08-13', 98),
+      sesionConRM('2026-08-06', 102),
+    ])
+    expect(r.estancado).toBe(true)
+    expect(r.sesionesSinPR).toBe(3)
+  })
+
   it('devuelve no estancado sin sesiones', () => {
     expect(detectarEstancamiento([]).estancado).toBe(false)
     expect(detectarEstancamiento(undefined).estancado).toBe(false)
@@ -240,6 +272,16 @@ describe('sugerirDeload', () => {
     const r = sugerirDeload([
       sesionConSeries('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 0 }]),
       sesionConSeries('2026-08-13', [{ weight_kg: 100, reps: 8, rir: 0 }]),
+    ])
+    expect(r.weight_kg).toBe(90)
+  })
+
+  it('se calcula sobre la última sesión entrenada, no sobre una sembrada', () => {
+    // La plantilla sembró 120 kg para hoy y todavía no se entrenó: el deload
+    // tiene que partir de los 100 kg que sí se levantaron.
+    const r = sugerirDeload([
+      sesionConSeries('2026-08-27', [{ weight_kg: 120, reps: 8, rir: null }]),
+      sesionConSeries('2026-08-20', [{ weight_kg: 100, reps: 8, rir: 0 }]),
     ])
     expect(r.weight_kg).toBe(90)
   })
