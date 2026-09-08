@@ -107,6 +107,20 @@ sesiones. Le paso al reporte de cargas del Dashboard, que uso el nombre crudo mi
 La normalizacion no resuelve sinonimos ("Press de banca" vs "Press banca"): eso se
 limpia con un `UPDATE` puntual sobre los datos, no con codigo.
 
+### `gym_logs.completed` es la definicion de "sesion entrenada"
+
+No inferir si una sesion se entreno a partir de si sus series tienen RIR cargado. El
+usuario suele completar todas las repeticiones previstas sin anotar el RIR, asi que
+"ninguna serie con RIR" no significa "no se entreno" — significa exactamente eso, nada
+mas. El dato correcto es `completed`, que el usuario marca a mano con el toggle "Sesion
+completada" de `Gimnasio.jsx`.
+
+El motor de progresion (`progresion.js`) uso el criterio de RIR hasta el 2026-09-08, y
+descartaba sesiones reales de 24-33 series por no tener RIR. Se corrigio a `completed`
+(ver `DECISIONS.md`). Cualquier vista nueva que agregue o cuente sesiones de gimnasio
+— el heatmap de actividad del Spec 3 incluido — tiene que filtrar por `completed = true`,
+no por la presencia de RIR.
+
 ### GOTCHA CRITICO: `auth.uid()` en el SQL Editor
 
 `auth.uid()` devuelve `null` cuando se ejecuta SQL directamente en el editor de Supabase (corre como `service_role`, sin sesion de usuario). Para inserts o updates directos desde el editor, hardcodear el UUID literal del usuario. No usar `auth.uid()` en SQL manual.
