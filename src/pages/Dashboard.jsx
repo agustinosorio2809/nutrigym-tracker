@@ -7,7 +7,7 @@ import { mejorSerie, pesoMaximo, normalizarNombre, agruparNombresDeEjercicio } f
 import { actividadPorDia, rachas } from '../services/actividad'
 import { C, ESTADO_COLORS } from '../theme'
 import { IconSunrise, IconSun, IconApple, IconMoon, IconGym, IconPlan, IconWarning, IconDownload, IconMeal } from '../components/icons'
-import { ResumenActividad, TiraAnual } from '../components/actividad'
+import { ResumenActividad, TiraAnual, MesDetalle, PanelDia } from '../components/actividad'
 import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
 
 const SLOTS = ['desayuno', 'almuerzo', 'merienda', 'cena']
@@ -140,9 +140,7 @@ export default function Dashboard({ session }) {
   const [actividad, setActividad] = useState([])
   const [diasEntreno, setDiasEntreno] = useState(3)
   const [mesActividad, setMesActividad] = useState(() => new Date().toISOString().slice(0, 7))
-  // diaSeleccionado (calendario mensual, click en día) se agrega en la Tarea 10 junto al
-  // componente que lo consume: declararlo sin uso acá rompe el gate de 0 errores de lint
-  // (no-unused-vars).
+  const [diaSeleccionado, setDiaSeleccionado] = useState(null)
 
   const hoyDate = new Date()
   const hoy = hoyDate.toLocaleDateString('sv-SE')
@@ -568,6 +566,14 @@ export default function Dashboard({ session }) {
                       rachas={rachas(actividad, diasEntreno, new Date().toISOString().slice(0, 10))}
                     />
                     <TiraAnual dias={actividad} mesSeleccionado={mesActividad} onSeleccionarMes={setMesActividad} />
+                    <MesDetalle
+                      dias={actividad}
+                      mes={mesActividad}
+                      onCambiarMes={setMesActividad}
+                      diaSeleccionado={diaSeleccionado}
+                      onSeleccionarDia={setDiaSeleccionado}
+                    />
+                    <PanelDia dia={actividad.find(d => d.date === diaSeleccionado)} />
                   </div>
                 )
               )}

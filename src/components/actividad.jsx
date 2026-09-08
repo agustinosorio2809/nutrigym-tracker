@@ -1,8 +1,10 @@
 // Componentes de presentación de la vista Actividad del Dashboard.
 
 import { useEffect, useRef } from 'react'
-import { C, INTENSIDAD } from '../theme'
+import { C, INTENSIDAD, GRUPO_COLORS } from '../theme'
 import { nivelDeIntensidad, NIVEL_SIN_SERIES, lunesDe } from '../services/actividad'
+import { GRUPOS } from '../services/musculos'
+import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'
 
 const MS_POR_DIA = 86400000
 
@@ -94,6 +96,161 @@ export function TiraAnual({ dias, onSeleccionarMes }) {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+const INICIALES = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+  'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+// La opacidad codifica el volumen; el tono, el grupo. El nivel 0 no llega acá: un día
+// sin sesión no se pinta.
+const OPACIDAD = [0, 0.4, 0.6, 0.8, 1]
+
+export function MesDetalle({ dias, mes, onCambiarMes, diaSeleccionado, onSeleccionarDia }) {
+  const porFecha = new Map(dias.map(d => [d.date, d]))
+  const maximo = Math.max(1, ...dias.map(d => d.totalSeries))
+
+  const [anio, mesNum] = mes.split('-').map(Number)
+  const primero = new Date(Date.UTC(anio, mesNum - 1, 1))
+  const diasEnMes = new Date(Date.UTC(anio, mesNum, 0)).getUTCDate()
+  // 0 = lunes, para alinear el día 1 en su columna.
+  const offset = (primero.getUTCDay() + 6) % 7
+
+  function moverMes(delta) {
+    const d = new Date(Date.UTC(anio, mesNum - 1 + delta, 1))
+    onCambiarMes(d.toISOString().slice(0, 7))
+  }
+
+  const gruposDelMes = GRUPOS.filter(g =>
+    dias.some(d => d.date.startsWith(mes) && (d.dominante === g || d.porGrupo[g])))
+
+  return (
+    <div style={{ marginBottom: '1.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+        <FlechaMes label="←" onClick={() => moverMes(-1)} />
+        <div style={{ fontSize: '14px', fontWeight: 600, color: C.textPrimary, minWidth: '150px' }}>
+          {MESES[mesNum - 1]} {anio}
+        </div>
+        <FlechaMes label="→" onClick={() => moverMes(1)} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+        {INICIALES.map((ini, i) => (
+          <div key={i} style={{
+            fontSize: '10px', fontWeight: 700, color: C.textMuted, textAlign: 'center',
+            paddingBottom: '4px', letterSpacing: '0.06em',
+          }}>{ini}</div>
+        ))}
+
+        {Array.from({ length: offset }, (_, i) => <div key={`v${i}`} />)}
+
+        {Array.from({ length: diasEnMes }, (_, i) => {
+          const num = i + 1
+          const iso = `${mes}-${String(num).padStart(2, '0')}`
+          const dia = porFecha.get(iso)
+          const nivel = !dia ? 0
+            : dia.totalSeries > 0 ? nivelDeIntensidad(dia.totalSeries, maximo)
+            : NIVEL_SIN_SERIES
+          const seleccionado = diaSeleccionado === iso
+
+          return (
+            <div
+              key={iso}
+              onClick={() => dia && onSeleccionarDia(seleccionado ? null : iso)}
+              title={dia ? `${dia.dominante} — ${dia.totalSeries} series` : ''}
+              style={{
+                position: 'relative', aspectRatio: '1', minHeight: '40px',
+                borderRadius: '6px', cursor: dia ? 'pointer' : 'default',
+                border: seleccionado ? `2px solid ${C.accent}` : '1px solid transparent',
+                background: C.surface,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+              {dia && (
+                <div style={{
+                  position: 'absolute', inset: 0, borderRadius: '5px',
+                  background: GRUPO_COLORS[dia.dominante],
+                  opacity: OPACIDAD[nivel],
+                }} />
+              )}
+              {/* El número va siempre: el color nunca es el único portador de información. */}
+              <span style={{
+                position: 'relative', fontSize: '12px',
+                fontWeight: dia ? 700 : 400,
+                color: dia ? '#0F1117' : C.textMuted,
+                fontVariantNumeric: 'tabular-nums',
+              }}>{num}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '14px' }}>
+        {gruposDelMes.map(g => (
+          <div key={g} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: GRUPO_COLORS[g] }} />
+            <span style={{ fontSize: '12px', color: C.textSecondary }}>{g}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FlechaMes({ label, onClick }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      width: '32px', height: '32px', borderRadius: '8px',
+      background: C.surface, border: `1px solid ${C.border}`,
+      color: C.textSecondary, cursor: 'pointer', fontSize: '14px',
+    },
+    { hover: { background: C.surfaceHigh }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{label}</button>
+}
+
+export function PanelDia({ dia }) {
+  if (!dia) return null
+
+  const fecha = new Date(dia.date + 'T12:00:00')
+    .toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
+  const grupos = GRUPOS.filter(g => dia.porGrupo[g])
+
+  return (
+    <div style={{
+      background: C.surface, border: `1px solid ${C.border}`, borderRadius: '10px',
+      padding: '16px', marginBottom: '1.75rem',
+    }}>
+      <div style={{ fontSize: '14px', fontWeight: 700, color: C.textPrimary, textTransform: 'capitalize' }}>
+        {fecha}
+      </div>
+      {dia.tipo && (
+        <div style={{ fontSize: '12px', color: C.accentText, marginTop: '2px' }}>{dia.tipo}</div>
+      )}
+
+      {grupos.length === 0 ? (
+        <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '12px' }}>
+          Sesión sin series cargadas.
+        </div>
+      ) : (
+        <div style={{ marginTop: '12px' }}>
+          {grupos.map(g => (
+            <div key={g} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 0', borderBottom: `1px solid ${C.border}`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: GRUPO_COLORS[g] }} />
+                <span style={{ fontSize: '13px', color: C.textPrimary }}>{g}</span>
+              </div>
+              <span style={{
+                fontSize: '13px', color: C.textSecondary, fontVariantNumeric: 'tabular-nums',
+              }}>{dia.porGrupo[g]} series</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
