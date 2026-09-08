@@ -109,6 +109,18 @@ GEMINI_API_KEY=
 
 `GEMINI_API_KEY` va **solo** en Vercel Environment Variables, sin prefijo `VITE_`. El cliente nunca la ve: las llamadas a Gemini pasan por `api/gemini.js` (Vercel serverless function).
 
+### Las variables `VITE_` van en TRES lugares, no en dos
+
+La app se compila por separado en tres entornos y cada uno necesita su propia copia. Olvidar el tercero no rompe ningun build — el bundle sale con `undefined` y falla recien en runtime.
+
+| Entorno | Que compila | Donde se configuran |
+|---|---|---|
+| Local | `npm run dev` / `npm run build` | archivo `.env` (gitignoreado) |
+| Vercel | la app web | Vercel Environment Variables |
+| GitHub Actions | el APK Android | Repository secrets (`secrets.*` en `build-apk.yml`) |
+
+Precedente: el commit `f228f6e` (2026-06-15) saco estas claves del codigo hardcodeado y las cargo en `.env` y en Vercel, pero no en GitHub Actions. Durante 42 commits todo APK salio en blanco (`createClient` lanza `supabaseUrl is required` al importarse, antes de que React monte) mientras la web seguia andando. Ante cualquier cambio de configuracion del cliente, verificar los tres.
+
 ---
 
 ## Convencion de estilos (IMPORTANTE)

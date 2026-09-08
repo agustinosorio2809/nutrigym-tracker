@@ -112,11 +112,12 @@ el nombre de la función) ni que referencie la tarea o el commit que lo originó
   15 reps, el umbral de RIR 2, las 3 sesiones de estancamiento: se testea el valor
   justo adentro y el justo afuera, porque ahí es donde se equivoca el off-by-one.
 - `npm test && npm run lint` antes de cada commit, siempre.
-- **`npm run lint` arranca en rojo** (22 errores y 7 warnings preexistentes, sin
-  relación con ninguna feature en curso). Hasta que se limpien, el criterio es **no
-  sumar errores nuevos**, no "lint en verde": comparar el conteo antes y después del
-  cambio. Un import que quedó sin usar tras un refactor es el caso más común y se
-  arregla en el momento.
+- **`npm run lint` tiene que quedar en 0 errores.** Los 22 errores preexistentes se
+  limpiaron el 2026-08-26, así que el criterio ya no es "no sumar errores nuevos"
+  sino lint en verde. Quedan 7 warnings de `react-hooks/exhaustive-deps` que se
+  toleran (los handlers de `useEffect` son function declarations hoisted a
+  propósito, ver `DECISIONS.md`). Un import que quedó sin usar tras un refactor es
+  el error más común y se arregla en el momento.
 
 ---
 
