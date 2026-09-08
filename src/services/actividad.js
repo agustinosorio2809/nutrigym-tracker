@@ -2,7 +2,7 @@
 // volumen recibió cada grupo, y con qué constancia.
 // Ver spec en docs/superpowers/specs/2026-09-08-gym-heatmap-actividad-design.md
 
-import { GRUPOS, grupoDe, grupoDeRutina } from './musculos'
+import { GRUPOS, SIN_CLASIFICAR, grupoDe, grupoDeRutina } from './musculos'
 
 // Las fechas vienen como 'YYYY-MM-DD', así que el orden lexicográfico es el cronológico.
 export function actividadPorDia(logs, ejercicios) {
@@ -54,4 +54,26 @@ function dominanteDe(porGrupo, tipo) {
   }
   // Sin series el día existe igual (futsal, cardio) y su grupo sale del tipo de rutina.
   return dominante || grupoDeRutina(tipo)
+}
+
+export function volumenPorGrupo(dias) {
+  const total = {}
+  for (const dia of (dias || [])) {
+    for (const [grupo, series] of Object.entries(dia?.porGrupo || {})) {
+      total[grupo] = (total[grupo] || 0) + series
+    }
+  }
+
+  const suma = Object.values(total).reduce((a, b) => a + b, 0)
+  if (!suma) return []
+
+  return Object.entries(total)
+    .map(([grupo, series]) => ({ grupo, series, porcentaje: Math.round((series / suma) * 100) }))
+    // Sin clasificar va último aunque tenga más volumen: no es un grupo muscular con el
+    // que comparar, es una tarea pendiente de mapeo.
+    .sort((a, b) => {
+      if (a.grupo === SIN_CLASIFICAR) return 1
+      if (b.grupo === SIN_CLASIFICAR) return -1
+      return b.series - a.series
+    })
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { actividadPorDia } from './actividad'
+import { actividadPorDia, volumenPorGrupo } from './actividad'
 
 const log = (id, date, routine_type) => ({ id, date, routine_type, completed: true })
 const ej = (log_id, exercise_name, series) => ({
@@ -65,5 +65,40 @@ describe('actividadPorDia', () => {
   it('devuelve lista vacía sin logs', () => {
     expect(actividadPorDia([], [])).toEqual([])
     expect(actividadPorDia(null, null)).toEqual([])
+  })
+})
+
+describe('volumenPorGrupo', () => {
+  const dias = [
+    { porGrupo: { Pecho: 10, Tríceps: 5 } },
+    { porGrupo: { Pecho: 6, Espalda: 4 } },
+  ]
+
+  it('suma las series de todos los días y ordena de mayor a menor', () => {
+    const r = volumenPorGrupo(dias)
+    expect(r.map(g => g.grupo)).toEqual(['Pecho', 'Tríceps', 'Espalda'])
+    expect(r[0].series).toBe(16)
+  })
+
+  it('calcula el porcentaje sobre el total', () => {
+    const r = volumenPorGrupo([{ porGrupo: { Pecho: 3, Espalda: 1 } }])
+    expect(r[0].porcentaje).toBe(75)
+    expect(r[1].porcentaje).toBe(25)
+  })
+
+  it('deja Sin clasificar último aunque tenga más series que el resto', () => {
+    const r = volumenPorGrupo([{ porGrupo: { 'Sin clasificar': 50, Pecho: 3 } }])
+    expect(r.map(g => g.grupo)).toEqual(['Pecho', 'Sin clasificar'])
+  })
+
+  it('omite los grupos sin series', () => {
+    const r = volumenPorGrupo([{ porGrupo: { Pecho: 3 } }])
+    expect(r).toHaveLength(1)
+  })
+
+  it('devuelve lista vacía sin días o sin series', () => {
+    expect(volumenPorGrupo([])).toEqual([])
+    expect(volumenPorGrupo(null)).toEqual([])
+    expect(volumenPorGrupo([{ porGrupo: {} }])).toEqual([])
   })
 })
