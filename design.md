@@ -46,6 +46,28 @@ Valores hex originales convertidos a OKLCH aproximado, documentados para referen
 ("VibeCode purple", tell documentado) — pasa a usar una variación de `accent` (mismo verde,
 mayor peso tipográfico + un ícono distintivo) en vez de un color de marca nuevo.
 
+## Color categórico (grupos musculares)
+
+La paleta de § Paleta es de **marca y estado**: un solo acento, más rojo/amarillo/azul con
+significado fijo. El heatmap de actividad necesita distinguir nueve categorías que no son
+estados, así que se agrega una escala categórica separada, en `src/theme.js` como
+`GRUPO_COLORS`.
+
+Reglas:
+
+- **Ningún grupo usa el rojo ni el amarillo.** Están tomados por error y pendiente; un
+  grupo muscular pintado de rojo se lee como un problema.
+- **Luminosidad pareja** entre los nueve, para que ninguno domine la grilla por brillo.
+- **`Cardio` y `Sin clasificar` van en neutros fríos**: no son grupos musculares y no
+  deberían competir visualmente con los que sí.
+- **El color nunca es el único portador de información.** Nueve tonos en celdas chicas no
+  son distinguibles con certeza para nadie, y menos con daltonismo. Toda celda coloreada
+  lleva su número de día, la leyenda está siempre visible, y el detalle del día se lee
+  escrito en el panel.
+
+La tira anual **no** usa esta paleta: es monocroma sobre el verde de marca (`INTENSIDAD`,
+5 niveles), porque responde una pregunta distinta — constancia, no composición.
+
 ## Tipografía
 Se mantiene el system-font stack (`-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`)
 — no se importa una fuente nueva. Razón: la app corre offline-first en el APK de Capacitor;

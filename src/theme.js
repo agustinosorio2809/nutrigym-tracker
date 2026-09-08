@@ -22,6 +22,26 @@ export const C = {
   navHeight: '64px',
 }
 
+// Paleta categórica para los grupos musculares. Luminosidad pareja para que ninguno
+// domine, y deliberadamente fuera de los colores con significado de estado: ningún grupo
+// usa el rojo (error) ni el amarillo (pendiente). Cardio y Sin clasificar van en neutros
+// porque no son grupos musculares con los que comparar volumen.
+export const GRUPO_COLORS = {
+  'Pecho': '#F472B6',
+  'Espalda': '#38BDF8',
+  'Hombros': '#A78BFA',
+  'Bíceps': '#2DD4BF',
+  'Tríceps': '#FB923C',
+  'Piernas': '#818CF8',
+  'Core': '#34D399',
+  'Cardio': '#64748B',
+  'Sin clasificar': '#3F4453',
+}
+
+// Cinco niveles del verde de marca para la tira anual. El 0 es "sin actividad" y tiene
+// que leerse como fondo, no como un valor bajo.
+export const INTENSIDAD = ['#1A1D27', '#0E4437', '#12684F', '#10B981', '#5EEAD4']
+
 export const SPACE = {
   '3xs': '4px', '2xs': '8px', xs: '12px', sm: '16px',
   md: '24px', lg: '32px', xl: '48px',
