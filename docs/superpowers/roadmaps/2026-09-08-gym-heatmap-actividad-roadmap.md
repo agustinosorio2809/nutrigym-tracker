@@ -1040,8 +1040,10 @@ Esperado: verde, `0 errors`. Los tests no cubren esto: la verificación es el pa
 
 1. `npm run dev` y abrir `http://localhost:5173`.
 2. Ir a **Reportes → Actividad**.
-3. Esperado: aparece la pestaña y se ven tres números. **Sesiones = 25**, que es el conteo
-   de `gym_logs` con `completed = true` verificado el 2026-09-08.
+3. Esperado: aparece la pestaña y se ven tres números. **Sesiones = 39**, que es el conteo
+   de `gym_logs` con `completed = true` verificado el 2026-09-08 después de recuperar las
+   14 sesiones que estaban sin marcar (ver `DECISIONS.md`). Las 5 que siguen en `false`
+   son sesiones vacías y una carga duplicada, y no deben aparecer.
 4. Abrir la consola del navegador. Esperado: **sin errores**.
 5. En la pestaña Network, buscar la request a `gym_exercises`. Esperado: trae menos de
    1000 filas.
@@ -1066,22 +1068,115 @@ git commit -m "feat: pestana Actividad con resumen y rachas"
   `actividad.js`.
 - Produce: `<TiraAnual dias mesSeleccionado onSeleccionarMes />` y `<ResumenActividad sesiones rachas />`.
 
-- [ ] **Paso 1: Crear `actividad.jsx` con `ResumenActividad` y `TiraAnual`**
+- [ ] **Paso 1: Crear `src/components/actividad.jsx` con `ResumenActividad` y `TiraAnual`**
 
 `ResumenActividad` se mueve acá desde `Dashboard.jsx` (patrón del repo: cuando una página
 pasa de ~500 líneas, sus componentes de presentación se van a `src/components/<pagina>.jsx`;
-`Dashboard.jsx` ya supera las 600).
+`Dashboard.jsx` ya supera las 600). Borrar la definición provisional que la Tarea 8 dejó al
+final de `Dashboard.jsx` y agregar el import.
 
-`TiraAnual`: grilla CSS inline de 7 filas × 53 columnas, `gridAutoFlow: 'column'`, celdas
-de 11px con `borderRadius: 2px`. El color de cada celda sale de
-`INTENSIDAD[nivelDeIntensidad(dia.totalSeries, maximo)]`, salvo los días con sesión y sin
-series, que usan `INTENSIDAD[NIVEL_SIN_SERIES]`. Los días sin sesión usan `INTENSIDAD[0]`.
+```jsx
+// src/components/actividad.jsx
+// Componentes de presentación de la vista Actividad del Dashboard.
 
-El contenedor lleva `overflowX: 'auto'` y, en mobile, un `useEffect` que hace
-`scrollLeft = scrollWidth` al montar para arrancar en la semana actual.
+import { useEffect, useRef } from 'react'
+import { C, INTENSIDAD } from '../theme'
+import { nivelDeIntensidad, NIVEL_SIN_SERIES, lunesDe } from '../services/actividad'
 
-Cada celda lleva `title` con la fecha y el volumen, para que el dato esté disponible como
-texto y no solo como color.
+const MS_POR_DIA = 86400000
+
+// Stat tipográfico: número grande + label + regla fina, sin card ni borde.
+// Tratamiento nº 2 de design.md.
+function Stat({ valor, label }) {
+  return (
+    <div style={{ flex: 1, minWidth: '90px', borderTop: `1px solid ${C.border}`, paddingTop: '10px' }}>
+      <div style={{
+        fontSize: '1.75rem', fontWeight: 800, color: C.textPrimary,
+        letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums',
+      }}>{valor}</div>
+      <div style={{
+        fontSize: '11px', fontWeight: 600, color: C.textMuted,
+        textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '2px',
+      }}>{label}</div>
+    </div>
+  )
+}
+
+export function ResumenActividad({ sesiones, rachas }) {
+  return (
+    <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '1.75rem' }}>
+      <Stat valor={sesiones} label="Sesiones" />
+      <Stat valor={rachas.actual} label="Racha actual" />
+      <Stat valor={rachas.maxima} label="Racha máxima" />
+    </div>
+  )
+}
+
+const CELDA = 11
+const GAP = 3
+
+// 53 columnas no entran en un teléfono: el contenedor scrollea solo, el body nunca.
+export function TiraAnual({ dias, onSeleccionarMes }) {
+  const scroller = useRef(null)
+
+  useEffect(() => {
+    // Arranca a la derecha: la semana actual es la que interesa al abrir.
+    if (scroller.current) scroller.current.scrollLeft = scroller.current.scrollWidth
+  }, [])
+
+  const porFecha = new Map(dias.map(d => [d.date, d]))
+  const maximo = Math.max(1, ...dias.map(d => d.totalSeries))
+
+  const hoy = new Date()
+  const finSemana = lunesDe(hoy.toISOString().slice(0, 10))
+  const inicio = new Date(new Date(finSemana + 'T12:00:00Z').getTime() - 52 * 7 * MS_POR_DIA)
+
+  const celdas = []
+  for (let i = 0; i < 53 * 7; i++) {
+    const fecha = new Date(inicio.getTime() + i * MS_POR_DIA)
+    const iso = fecha.toISOString().slice(0, 10)
+    const dia = porFecha.get(iso)
+    const nivel = !dia ? 0
+      : dia.totalSeries > 0 ? nivelDeIntensidad(dia.totalSeries, maximo)
+      : NIVEL_SIN_SERIES
+    celdas.push({ iso, dia, nivel })
+  }
+
+  return (
+    <div style={{ marginBottom: '1.75rem' }}>
+      <div style={{
+        fontSize: '11px', fontWeight: 600, color: C.textMuted, marginBottom: '8px',
+        textTransform: 'uppercase', letterSpacing: '0.06em',
+      }}>Último año</div>
+
+      <div ref={scroller} style={{ overflowX: 'auto', paddingBottom: '4px' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateRows: `repeat(7, ${CELDA}px)`,
+          gridAutoFlow: 'column',
+          gridAutoColumns: `${CELDA}px`,
+          gap: `${GAP}px`,
+          width: 'max-content',
+        }}>
+          {celdas.map(({ iso, dia, nivel }) => (
+            <div
+              key={iso}
+              onClick={() => dia && onSeleccionarMes(iso.slice(0, 7))}
+              // El dato viaja como texto y no solo como color.
+              title={dia ? `${iso} — ${dia.totalSeries} series` : iso}
+              style={{
+                background: INTENSIDAD[nivel],
+                borderRadius: '2px',
+                cursor: dia ? 'pointer' : 'default',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+```
 
 - [ ] **Paso 2: Verificación manual en el navegador**
 
@@ -1092,7 +1187,7 @@ texto y no solo como color.
 4. Achicar la ventana a menos de 640px. Esperado: la tira scrollea horizontalmente
    **dentro de su contenedor**, arrancando a la derecha, y la página **no** scrollea de
    costado.
-5. Contar a ojo los días verdes. Esperado: 25.
+5. Contar a ojo los días verdes. Esperado: 39, repartidos entre marzo y septiembre de 2026.
 
 - [ ] **Paso 3: Correr la suite entera y el lint**
 
@@ -1119,29 +1214,178 @@ git commit -m "feat: tira anual de actividad"
 - Produce: `<MesDetalle dias mes onCambiarMes diaSeleccionado onSeleccionarDia />` y
   `<PanelDia dia />`.
 
-- [ ] **Paso 1: Implementar `MesDetalle`**
+- [ ] **Paso 1: Implementar `MesDetalle` en `src/components/actividad.jsx`**
 
-Grilla de 7 columnas con las iniciales de los días arriba (L M M J V S D) y las celdas del
-mes, alineando el primer día en su columna correcta. Celda mínima de 40px.
+```jsx
+// agregar en src/components/actividad.jsx
+// sumar al import de theme: GRUPO_COLORS
+// sumar al import de services: nada nuevo
+import { GRUPOS } from '../services/musculos'
 
-El fondo de cada celda es `GRUPO_COLORS[dia.dominante]` con la opacidad derivada del nivel
-de intensidad (nivel 1 → 40%, 4 → 100%), aplicada como `opacity` sobre un div de fondo para
-no perder la legibilidad del número encima. **Cada celda muestra el número del día**, en
-`C.textPrimary` si tiene sesión y en `C.textMuted` si no.
+const INICIALES = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+  'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
-Debajo, la leyenda: un punto de color por grupo con su nombre, en el orden de `GRUPOS`,
-omitiendo los que no aparecen en el mes.
+// La opacidad codifica el volumen; el tono, el grupo. El nivel 0 no llega acá: un día
+// sin sesión no se pinta.
+const OPACIDAD = [0, 0.4, 0.6, 0.8, 1]
 
-Flechas de mes anterior / siguiente con el mismo patrón que el selector de semana ya
-existente en Reportes.
+export function MesDetalle({ dias, mes, onCambiarMes, diaSeleccionado, onSeleccionarDia }) {
+  const porFecha = new Map(dias.map(d => [d.date, d]))
+  const maximo = Math.max(1, ...dias.map(d => d.totalSeries))
+
+  const [anio, mesNum] = mes.split('-').map(Number)
+  const primero = new Date(Date.UTC(anio, mesNum - 1, 1))
+  const diasEnMes = new Date(Date.UTC(anio, mesNum, 0)).getUTCDate()
+  // 0 = lunes, para alinear el día 1 en su columna.
+  const offset = (primero.getUTCDay() + 6) % 7
+
+  function moverMes(delta) {
+    const d = new Date(Date.UTC(anio, mesNum - 1 + delta, 1))
+    onCambiarMes(d.toISOString().slice(0, 7))
+  }
+
+  const gruposDelMes = GRUPOS.filter(g =>
+    dias.some(d => d.date.startsWith(mes) && (d.dominante === g || d.porGrupo[g])))
+
+  return (
+    <div style={{ marginBottom: '1.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+        <FlechaMes label="←" onClick={() => moverMes(-1)} />
+        <div style={{ fontSize: '14px', fontWeight: 600, color: C.textPrimary, minWidth: '150px' }}>
+          {MESES[mesNum - 1]} {anio}
+        </div>
+        <FlechaMes label="→" onClick={() => moverMes(1)} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+        {INICIALES.map((ini, i) => (
+          <div key={i} style={{
+            fontSize: '10px', fontWeight: 700, color: C.textMuted, textAlign: 'center',
+            paddingBottom: '4px', letterSpacing: '0.06em',
+          }}>{ini}</div>
+        ))}
+
+        {Array.from({ length: offset }, (_, i) => <div key={`v${i}`} />)}
+
+        {Array.from({ length: diasEnMes }, (_, i) => {
+          const num = i + 1
+          const iso = `${mes}-${String(num).padStart(2, '0')}`
+          const dia = porFecha.get(iso)
+          const nivel = !dia ? 0
+            : dia.totalSeries > 0 ? nivelDeIntensidad(dia.totalSeries, maximo)
+            : NIVEL_SIN_SERIES
+          const seleccionado = diaSeleccionado === iso
+
+          return (
+            <div
+              key={iso}
+              onClick={() => dia && onSeleccionarDia(seleccionado ? null : iso)}
+              title={dia ? `${dia.dominante} — ${dia.totalSeries} series` : ''}
+              style={{
+                position: 'relative', aspectRatio: '1', minHeight: '40px',
+                borderRadius: '6px', cursor: dia ? 'pointer' : 'default',
+                border: seleccionado ? `2px solid ${C.accent}` : '1px solid transparent',
+                background: C.surface,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+              {dia && (
+                <div style={{
+                  position: 'absolute', inset: 0, borderRadius: '5px',
+                  background: GRUPO_COLORS[dia.dominante],
+                  opacity: OPACIDAD[nivel],
+                }} />
+              )}
+              {/* El número va siempre: el color nunca es el único portador de información. */}
+              <span style={{
+                position: 'relative', fontSize: '12px',
+                fontWeight: dia ? 700 : 400,
+                color: dia ? '#0F1117' : C.textMuted,
+                fontVariantNumeric: 'tabular-nums',
+              }}>{num}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '14px' }}>
+        {gruposDelMes.map(g => (
+          <div key={g} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: GRUPO_COLORS[g] }} />
+            <span style={{ fontSize: '12px', color: C.textSecondary }}>{g}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FlechaMes({ label, onClick }) {
+  const { style, handlers } = useInteractiveStyle(
+    {
+      width: '32px', height: '32px', borderRadius: '8px',
+      background: C.surface, border: `1px solid ${C.border}`,
+      color: C.textSecondary, cursor: 'pointer', fontSize: '14px',
+    },
+    { hover: { background: C.surfaceHigh }, focus: focusRing }
+  )
+  return <button onClick={onClick} style={style} {...handlers}>{label}</button>
+}
+```
+
+Agregar al import de hooks: `import { useInteractiveStyle, focusRing } from '../hooks/useInteractiveStyle'`.
 
 - [ ] **Paso 2: Implementar `PanelDia`**
 
-Al tocar una celda con sesión, debajo del calendario aparece un panel (card con borde,
-tratamiento nº 3 de `design.md`) con: la fecha larga, el `routine_type`, y una fila por
-grupo con su cantidad de series. Si el día no tiene series, un texto que lo diga.
+Panel y no modal: el modal taparía el calendario y se perdería el contexto del día tocado.
 
-Se usa panel y no modal para no tapar el calendario y perder el contexto del día tocado.
+```jsx
+// agregar en src/components/actividad.jsx
+export function PanelDia({ dia }) {
+  if (!dia) return null
+
+  const fecha = new Date(dia.date + 'T12:00:00')
+    .toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
+  const grupos = GRUPOS.filter(g => dia.porGrupo[g])
+
+  return (
+    <div style={{
+      background: C.surface, border: `1px solid ${C.border}`, borderRadius: '10px',
+      padding: '16px', marginBottom: '1.75rem',
+    }}>
+      <div style={{ fontSize: '14px', fontWeight: 700, color: C.textPrimary, textTransform: 'capitalize' }}>
+        {fecha}
+      </div>
+      {dia.tipo && (
+        <div style={{ fontSize: '12px', color: C.accentText, marginTop: '2px' }}>{dia.tipo}</div>
+      )}
+
+      {grupos.length === 0 ? (
+        <div style={{ fontSize: '13px', color: C.textMuted, marginTop: '12px' }}>
+          Sesión sin series cargadas.
+        </div>
+      ) : (
+        <div style={{ marginTop: '12px' }}>
+          {grupos.map(g => (
+            <div key={g} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 0', borderBottom: `1px solid ${C.border}`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: GRUPO_COLORS[g] }} />
+                <span style={{ fontSize: '13px', color: C.textPrimary }}>{g}</span>
+              </div>
+              <span style={{
+                fontSize: '13px', color: C.textSecondary, fontVariantNumeric: 'tabular-nums',
+              }}>{dia.porGrupo[g]} series</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+```
 
 - [ ] **Paso 3: Verificación manual en el navegador**
 
@@ -1184,13 +1428,74 @@ git commit -m "feat: calendario mensual por grupo muscular con panel de dia"
 
 - [ ] **Paso 1: Implementar `BarrasPorGrupo`**
 
-Una fila por grupo: nombre a la izquierda, barra horizontal proporcional al porcentaje en
-`GRUPO_COLORS[grupo]`, y a la derecha `N series · M%`. Sin usar Recharts: es una barra por
-fila, un div con `width` en porcentaje alcanza y evita una dependencia de gráfico para algo
-que no la necesita.
+Sin Recharts: es una barra por fila, un div con `width` en porcentaje alcanza y evita
+montar un gráfico para algo que no lo necesita.
 
 Las barras reflejan el **mes seleccionado**, no el año, para que se lean junto al
-calendario que está arriba. El título de la sección dice explícitamente qué período cubre.
+calendario que está arriba. El título dice explícitamente qué período cubre.
+
+```jsx
+// agregar en src/components/actividad.jsx
+export function BarrasPorGrupo({ volumen, titulo }) {
+  if (!volumen.length) {
+    return (
+      <div style={{ color: C.textMuted, fontSize: '13px', padding: '1rem 0' }}>
+        No hay series registradas en este período.
+      </div>
+    )
+  }
+
+  const mayor = volumen[0].series
+
+  return (
+    <div>
+      <div style={{
+        fontSize: '11px', fontWeight: 600, color: C.textMuted, marginBottom: '10px',
+        textTransform: 'uppercase', letterSpacing: '0.06em',
+      }}>{titulo}</div>
+
+      {volumen.map(({ grupo, series, porcentaje }) => (
+        <div key={grupo} style={{ marginBottom: '10px' }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+            marginBottom: '4px',
+          }}>
+            <span style={{ fontSize: '13px', color: C.textPrimary }}>{grupo}</span>
+            <span style={{
+              fontSize: '12px', color: C.textSecondary, fontVariantNumeric: 'tabular-nums',
+            }}>{series} series · {porcentaje}%</span>
+          </div>
+          <div style={{ height: '8px', background: C.surface, borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{
+              // Proporcional al mayor y no al total: con nueve grupos, escalar por el
+              // total dejaría todas las barras aplastadas contra la izquierda.
+              width: `${(series / mayor) * 100}%`,
+              height: '100%',
+              background: GRUPO_COLORS[grupo],
+              borderRadius: '4px',
+            }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+En `Dashboard.jsx`, componer los cuatro bloques y filtrar el volumen al mes visible:
+
+```jsx
+const diasDelMes = actividad.filter(d => d.date.startsWith(mesActividad))
+
+<ResumenActividad sesiones={actividad.length} rachas={rachas(actividad, diasEntreno, hoyISO)} />
+<TiraAnual dias={actividad} onSeleccionarMes={setMesActividad} />
+<MesDetalle
+  dias={actividad} mes={mesActividad} onCambiarMes={setMesActividad}
+  diaSeleccionado={diaSeleccionado} onSeleccionarDia={setDiaSeleccionado}
+/>
+<PanelDia dia={actividad.find(d => d.date === diaSeleccionado)} />
+<BarrasPorGrupo volumen={volumenPorGrupo(diasDelMes)} titulo="Volumen del mes" />
+```
 
 - [ ] **Paso 2: Verificación manual en el navegador**
 

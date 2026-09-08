@@ -229,3 +229,29 @@ banca" en minúscula se lee como un error de la app.
 **Efecto aceptado**: las sesiones renombradas entran al historial del ejercicio canónico,
 así que pueden mover un PR y con él la carga que sugiere el motor de progresión. Son 1-2
 sesiones por caso con cargas de otra época.
+
+## Recuperación de sesiones sin marcar y criterio de sesión entrenada (2026-09-08)
+
+Al preparar el Spec 3 apareció que 19 de las 44 sesiones de `gym_logs` tenían
+`completed = false`, y que **ninguna de ellas tenía una sola serie con RIR cargado**. El
+usuario aclaró que entrena sin cargar el RIR con frecuencia, porque suele completar todas
+las repeticiones previstas de cada serie.
+
+Se recuperaron 14 marcándolas `completed = true`: las 11 con ejercicios y series
+efectivamente cargados, más 3 de cardio y futsal, que no tienen series por naturaleza y no
+por falta de datos. Quedaron en `false` cinco: cuatro sesiones vacías (creadas y
+abandonadas, sin un solo ejercicio) y una carga duplicada del 2026-08-07 — dos filas del
+mismo día con 10 ejercicios y 33 series cada una. Se recuperó la que tiene `routine_type`
+y se dejó la otra sin marcar, sin borrarla.
+
+- El `UPDATE` se apoyó en `routine_type is not null and <> ''` para excluir la duplicada
+  sin necesidad de apuntarle por id: era la única de la lista sin tipo.
+- Backup previo en `gym_logs_backup_20260908`.
+- Total tras el cambio: 39 sesiones válidas contra 25 antes.
+
+**Consecuencia sobre el Spec 2, pendiente de resolver:** el fix del estancamiento del
+2026-09-08 descarta las sesiones donde ninguna serie tiene RIR, asumiendo que son
+plantillas sembradas y no entrenadas. Los datos muestran que esa inferencia es falsa para
+este usuario: hay entrenamientos completos de 32 series sin un solo RIR. `detectarEstancamiento`
+y `sugerirDeload` deberían pasar a usar `completed` —el mismo criterio que adopta el Spec 3—
+en vez de inferir por RIR, lo que implica sumar `completed` a la query de `Gimnasio.jsx`.
