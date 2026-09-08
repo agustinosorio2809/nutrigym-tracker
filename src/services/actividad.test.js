@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { actividadPorDia, volumenPorGrupo } from './actividad'
+import { actividadPorDia, volumenPorGrupo, nivelDeIntensidad, NIVEL_SIN_SERIES } from './actividad'
 
 const log = (id, date, routine_type) => ({ id, date, routine_type, completed: true })
 const ej = (log_id, exercise_name, series) => ({
@@ -100,5 +100,33 @@ describe('volumenPorGrupo', () => {
     expect(volumenPorGrupo([])).toEqual([])
     expect(volumenPorGrupo(null)).toEqual([])
     expect(volumenPorGrupo([{ porGrupo: {} }])).toEqual([])
+  })
+})
+
+describe('nivelDeIntensidad', () => {
+  it('devuelve 0 sin actividad', () => {
+    expect(nivelDeIntensidad(0, 20)).toBe(0)
+  })
+
+  it('devuelve 4 en el máximo del período', () => {
+    expect(nivelDeIntensidad(20, 20)).toBe(4)
+  })
+
+  it('reparte los intermedios en cuartiles', () => {
+    expect(nivelDeIntensidad(5, 20)).toBe(1)
+    expect(nivelDeIntensidad(10, 20)).toBe(2)
+    expect(nivelDeIntensidad(15, 20)).toBe(3)
+  })
+
+  it('devuelve 1 para cualquier volumen mínimo, nunca 0', () => {
+    expect(nivelDeIntensidad(1, 100)).toBe(1)
+  })
+
+  it('devuelve el nivel fijo cuando hubo sesión pero no series', () => {
+    expect(NIVEL_SIN_SERIES).toBe(2)
+  })
+
+  it('no explota si la referencia es 0', () => {
+    expect(nivelDeIntensidad(0, 0)).toBe(0)
   })
 })

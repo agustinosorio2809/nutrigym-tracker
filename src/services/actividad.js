@@ -77,3 +77,20 @@ export function volumenPorGrupo(dias) {
       return b.series - a.series
     })
 }
+
+// Un día con sesión válida pero sin series (futsal, cardio) toma un nivel fijo
+// intermedio: dejarlo en el más bajo lo haría parecer un día flojo, y no lo es.
+export const NIVEL_SIN_SERIES = 2
+
+// La escala es relativa al período visible y no absoluta: con umbrales fijos, un mes de
+// bajo volumen se veria uniformemente pálido y no se distinguiría "entrené poco" de
+// "la escala está mal calibrada".
+export function nivelDeIntensidad(series, referencia) {
+  if (!series || series <= 0) return 0
+  if (!referencia || referencia <= 0) return 0
+  const proporcion = series / referencia
+  if (proporcion > 0.75) return 4
+  if (proporcion > 0.5) return 3
+  if (proporcion > 0.25) return 2
+  return 1
+}
