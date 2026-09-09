@@ -1,11 +1,14 @@
 # ROADMAP
 
-**Activo:** Spec 3 (heatmap de actividad y mapa muscular). Spec y roadmap escritos y
-commiteados, pendiente de ejecución:
+**Activo:** ninguno. No hay roadmap pendiente de ejecución.
 
-- Spec: `docs/superpowers/specs/2026-09-08-gym-heatmap-actividad-design.md`
-- Roadmap: `docs/superpowers/roadmaps/2026-09-08-gym-heatmap-actividad-roadmap.md` (12
-  tareas, listas para ejecutar con subagent-driven-development)
+El Spec 3 (heatmap de actividad y mapa muscular) se completó y su roadmap quedó archivado
+en `docs/superpowers/roadmaps/2026-09-08-gym-heatmap-actividad-roadmap.md`. Agrega la
+pestaña "Actividad" a `Dashboard → Reportes` (tira anual de constancia, calendario mensual
+por grupo muscular dominante, barras de volumen y rachas) — ver
+`docs/superpowers/specs/2026-09-08-gym-heatmap-actividad-design.md` y las decisiones de
+diseño en `DECISIONS.md`. Pendiente para el usuario final: recorrer las cuatro pestañas de
+Reportes con datos reales (no se pudo verificar en navegador durante la implementación).
 
 El Spec 2 (motor de progresión automática) se completó y su roadmap quedó archivado en
 `docs/superpowers/roadmaps/2026-08-26-gym-motor-progresion-roadmap.md`. Recibió un fix de

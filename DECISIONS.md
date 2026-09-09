@@ -279,3 +279,43 @@ actividad. Es un dato explícito del usuario en vez de una inferencia sobre otro
 Verificado en el navegador: la sesión del 2026-09-07 (32 series, ningún RIR cargado)
 aparece "Completado" en el Historial y la query a `gym_exercises` trae `completed` en el
 `select` — antes de este fix, esa sesión no contaba como entrenada para el motor.
+
+## Spec 3 — Heatmap de actividad (2026-09-08)
+
+- **Grupo primario únicamente, sin secundarios ponderados.** Con ~44 sesiones repartidas
+  en 20 músculos finos las diferencias serían ruido estadístico, y el factor de
+  ponderación de un secundario ("¿el tríceps en press banca cuenta media serie?") no lo
+  puede validar nadie. Agregar secundarios más adelante es aditivo.
+- **`completed` sobre inferencia por RIR**, igual criterio que el fix del motor de
+  progresión de esta misma fecha: dato explícito del usuario, no una inferencia sobre
+  otro dato.
+- **Mapa ejercicio → grupo muscular en código (`src/services/musculos.js`), no en
+  Supabase.** Son ~48 entradas que cambian pocas veces al año; una tabla con RLS y UI de
+  asignación es complejidad permanente para una lista que se edita en una línea.
+- **Intensidad relativa al período visible, no absoluta.** Con umbrales fijos un mes de
+  bajo volumen se vería uniformemente pálido y no se podría distinguir "entrené poco" de
+  "la escala está mal calibrada".
+- **Paleta categórica separada de los colores de estado**, extendiendo `design.md`: la
+  tira anual reusa el verde de marca (`C.accent`, que ya significa "hecho" en la app) en
+  5 niveles de intensidad; el mes usa 9 tonos categóricos nuevos, ninguno rojo (error) ni
+  amarillo (pendiente), para no pisar esos significados existentes.
+
+### Ambigüedades resueltas durante la ejecución (no previstas en el spec)
+
+- **`rachas()` recibe `(dias, diasEntreno, hoy)`**, no solo `(dias)` como en la firma del
+  spec. El cuerpo del spec exige tomar `dias_entreno` de `user_profile` en vez de
+  hardcodear 3, y sin `hoy` inyectado no se puede testear que "la semana en curso no
+  corta la racha actual" sin que el test dependa de la fecha real de ejecución.
+- **La verificación manual en navegador de las Tareas 8-11 no se ejecutó** por falta de
+  acceso a un login durante la implementación — se sustituyó por `npm run build` +
+  arranque limpio de `npm run dev`. Recorrer las cuatro pestañas de Reportes con datos
+  reales queda pendiente para el usuario final (Tarea 12, Paso 5).
+- **La carga de "actividad" se integró en el dispatcher único `cargarReportes()`** que
+  `Dashboard.jsx` ya tenía para adherencia/viandas/cargas, en vez de un `useEffect`
+  separado: sigue el patrón ya establecido en el archivo antes que introducir uno nuevo.
+- **`mesActividad` y `diaSeleccionado` se agregaron de forma diferida**, cada uno en la
+  primera tarea que realmente lo consumía (Tarea 9 y Tarea 10 respectivamente) en vez de
+  todos juntos en la Tarea 8, para no dejar variables sin usar y sumar errores de lint.
+- **Un IIFE que scopeaba `diasDelMes`** (usada una sola vez) se sacó en la revisión de la
+  Tarea 11 y se reemplazó por un filtro inline en el call site: YAGNI, y en línea con que
+  ningún otro lugar de `src/` usa IIFEs de renderizado.

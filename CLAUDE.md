@@ -50,6 +50,7 @@ src/
   theme.js                 # Tokens de color y espaciado (C, SPACE, ESTADO_COLORS)
   components/
     gym.jsx                # Componentes de presentación de la pantalla de Gimnasio
+    actividad.jsx          # Componentes de presentación del reporte de Actividad (heatmap)
     icons.jsx              # Set unico de iconos SVG dibujados a mano
   hooks/
     useInteractiveStyle.js # Hover/focus/active sin CSS (el proyecto es 100% inline)
@@ -58,6 +59,8 @@ src/
     notifications.js       # Programacion de notificaciones locales (Capacitor)
     progresion.js          # Motor de progresión: sugerencia de peso, estancamiento, deload
     oneRepMax.js           # Epley 1RM, mejor serie, PR, e identidad de ejercicios por nombre
+    musculos.js            # Mapa ejercicio -> grupo muscular (GRUPOS, MAPA, grupoDe)
+    actividad.js           # Agregación de actividad: volumen por dia/grupo, intensidad, rachas
 supabase/
   migrations/              # Migraciones SQL del schema (incluyendo RLS policies)
 .github/

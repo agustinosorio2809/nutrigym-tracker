@@ -14,6 +14,7 @@ A full-stack progressive web app for tracking nutrition and gym routines, with A
 - **Gym routines** — structured workout sessions organized by muscle group with weight/reps history
 - **Estimated 1RM & PR detection** — per-exercise one-rep-max estimate (Epley) and automatic personal-record detection from set history
 - **Automatic weight progression** — smart load suggestion via double-progression (RIR feedback), plateau detection, and deload offers
+- **Activity heatmap & muscle mapping** — yearly consistency view and volume distribution per muscle group
 - **Local notifications** — configurable meal-time reminders (Android)
 - **Body recomposition focus** — nutrition and training designed around fat loss + muscle maintenance
 - **Dark mode UI** — clean interface with bottom navigation
@@ -50,8 +51,11 @@ nutrigym-tracker/
 │   │   ├── geminiPlan.js       # Weekly plan generation via /api/gemini
 │   │   ├── notifications.js    # Local notification scheduling (Capacitor)
 │   │   ├── oneRepMax.js        # Epley 1RM, best set, PR detection, exercise-name identity
-│   │   └── progresion.js       # Load suggestion (RIR double progression), plateau, deload
-│   ├── components/       # icons.jsx (shared SVG icon set), gym.jsx (Gimnasio presentation)
+│   │   ├── progresion.js       # Load suggestion (RIR double progression), plateau, deload
+│   │   ├── musculos.js         # Exercise -> muscle group map
+│   │   └── actividad.js        # Activity aggregation: volume per day/group, intensity, streaks
+│   ├── components/       # icons.jsx (shared SVG icon set), gym.jsx (Gimnasio presentation),
+│   │                     # actividad.jsx (Actividad report presentation)
 │   ├── hooks/            # useInteractiveStyle.js (hover/focus/active — no CSS files)
 │   ├── theme.js          # Design tokens (colors, spacing)
 │   ├── App.jsx           # Auth, routing, nav
