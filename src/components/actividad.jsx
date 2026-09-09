@@ -109,8 +109,11 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
 const OPACIDAD = [0, 0.4, 0.6, 0.8, 1]
 
 export function MesDetalle({ dias, mes, onCambiarMes, diaSeleccionado, onSeleccionarDia }) {
-  const porFecha = new Map(dias.map(d => [d.date, d]))
-  const maximo = Math.max(1, ...dias.map(d => d.totalSeries))
+  // La intensidad es relativa al mes visible, no al año completo: si no se filtra acá,
+  // un mes de bajo volumen sale uniformemente pálido aunque haya sido un mes normal.
+  const diasDelMes = dias.filter(d => d.date.startsWith(mes))
+  const porFecha = new Map(diasDelMes.map(d => [d.date, d]))
+  const maximo = Math.max(1, ...diasDelMes.map(d => d.totalSeries))
 
   const [anio, mesNum] = mes.split('-').map(Number)
   const primero = new Date(Date.UTC(anio, mesNum - 1, 1))
@@ -123,8 +126,9 @@ export function MesDetalle({ dias, mes, onCambiarMes, diaSeleccionado, onSelecci
     onCambiarMes(d.toISOString().slice(0, 7))
   }
 
-  const gruposDelMes = GRUPOS.filter(g =>
-    dias.some(d => d.date.startsWith(mes) && (d.dominante === g || d.porGrupo[g])))
+  // Solo grupos que fueron dominantes de algún día: el color de cada celda sale de
+  // `dominante`, así que un grupo que nunca lo fue no se pinta y no debe estar en la leyenda.
+  const gruposDelMes = GRUPOS.filter(g => diasDelMes.some(d => d.dominante === g))
 
   return (
     <div style={{ marginBottom: '1.75rem' }}>
@@ -207,7 +211,9 @@ export function BarrasPorGrupo({ volumen, titulo }) {
     )
   }
 
-  const mayor = volumen[0].series
+  // volumenPorGrupo() siempre pone 'Sin clasificar' último aunque tenga más series que
+  // el resto: el mayor real hay que calcularlo sobre todo el array, no tomar el primero.
+  const mayor = Math.max(...volumen.map(v => v.series))
 
   return (
     <div>

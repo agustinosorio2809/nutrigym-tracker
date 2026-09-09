@@ -200,10 +200,25 @@ export default function Dashboard({ session }) {
 
     // El rango va en la query y no en memoria: PostgREST corta en 1000 filas sin avisar, y
     // el síntoma sería un calendario al que le faltan días en silencio.
-    const { data: ejs } = await supabase
-      .from('gym_exercises')
-      .select('exercise_name, log_id, gym_sets(id)')
-      .in('log_id', logs.map(l => l.id))
+    //
+    // Y esas mismas 1000 filas hay que paginarlas: con varias sesiones por semana x ~6
+    // ejercicios por sesion x un año, gym_exercises puede superar el límite de PostgREST,
+    // que corta en silencio sin avisar (mismo patrón de falla que la normalización de
+    // nombres y `gym_logs.completed` — ver CLAUDE.md).
+    let ejs = []
+    let desdeFila = 0
+    const TAMANO_PAGINA = 1000
+    while (true) {
+      const { data: pagina } = await supabase
+        .from('gym_exercises')
+        .select('exercise_name, log_id, gym_sets(id)')
+        .in('log_id', logs.map(l => l.id))
+        .range(desdeFila, desdeFila + TAMANO_PAGINA - 1)
+      if (!pagina?.length) break
+      ejs = ejs.concat(pagina)
+      if (pagina.length < TAMANO_PAGINA) break
+      desdeFila += TAMANO_PAGINA
+    }
 
     const { data: perfil } = await supabase
       .from('user_profile')
@@ -212,7 +227,7 @@ export default function Dashboard({ session }) {
       .single()
     if (perfil?.dias_entreno) setDiasEntreno(perfil.dias_entreno)
 
-    setActividad(actividadPorDia(logs, ejs || []))
+    setActividad(actividadPorDia(logs, ejs))
   }
 
   async function cargarAdherencia() {
