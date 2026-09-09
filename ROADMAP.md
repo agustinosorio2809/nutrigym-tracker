@@ -7,8 +7,10 @@ en `docs/superpowers/roadmaps/2026-09-08-gym-heatmap-actividad-roadmap.md`. Agre
 pestaña "Actividad" a `Dashboard → Reportes` (tira anual de constancia, calendario mensual
 por grupo muscular dominante, barras de volumen y rachas) — ver
 `docs/superpowers/specs/2026-09-08-gym-heatmap-actividad-design.md` y las decisiones de
-diseño en `DECISIONS.md`. Pendiente para el usuario final: recorrer las cuatro pestañas de
-Reportes con datos reales (no se pudo verificar en navegador durante la implementación).
+diseño en `DECISIONS.md`. La revisión final de todo el branch encontró y corrigió tres
+bugs de cableado entre tareas (paginación de `gym_exercises`, intensidad del mes mal
+escalada, leyenda con grupos fantasma — ver `DECISIONS.md`). Verificado en el navegador
+con datos reales junto al usuario el 2026-09-08: sin pendientes.
 
 El Spec 2 (motor de progresión automática) se completó y su roadmap quedó archivado en
 `docs/superpowers/roadmaps/2026-08-26-gym-motor-progresion-roadmap.md`. Recibió un fix de

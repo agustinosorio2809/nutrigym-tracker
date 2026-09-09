@@ -306,10 +306,10 @@ aparece "Completado" en el Historial y la query a `gym_exercises` trae `complete
   spec. El cuerpo del spec exige tomar `dias_entreno` de `user_profile` en vez de
   hardcodear 3, y sin `hoy` inyectado no se puede testear que "la semana en curso no
   corta la racha actual" sin que el test dependa de la fecha real de ejecución.
-- **La verificación manual en navegador de las Tareas 8-11 no se ejecutó** por falta de
-  acceso a un login durante la implementación — se sustituyó por `npm run build` +
-  arranque limpio de `npm run dev`. Recorrer las cuatro pestañas de Reportes con datos
-  reales queda pendiente para el usuario final (Tarea 12, Paso 5).
+- **La verificación manual en navegador de las Tareas 8-11 no se ejecutó durante la
+  implementación** por falta de acceso a un login — se sustituyó por `npm run build` +
+  arranque limpio de `npm run dev`. Se hizo después, en vivo con el usuario y datos
+  reales (ver más abajo): quedó verificada.
 - **La carga de "actividad" se integró en el dispatcher único `cargarReportes()`** que
   `Dashboard.jsx` ya tenía para adherencia/viandas/cargas, en vez de un `useEffect`
   separado: sigue el patrón ya establecido en el archivo antes que introducir uno nuevo.
@@ -319,3 +319,37 @@ aparece "Completado" en el Historial y la query a `gym_exercises` trae `complete
 - **Un IIFE que scopeaba `diasDelMes`** (usada una sola vez) se sacó en la revisión de la
   Tarea 11 y se reemplazó por un filtro inline en el call site: YAGNI, y en línea con que
   ningún otro lugar de `src/` usa IIFEs de renderizado.
+
+### Fix wave de la revisión final de todo el branch (2026-09-08)
+
+Las revisiones por tarea solo ven el diff de esa tarea; tres bugs vivían en el cableado
+entre tareas y recién aparecieron al revisar los 13 commits juntos:
+
+- **`gym_exercises` en `cargarActividad()` no paginaba contra el límite de 1000 filas de
+  PostgREST.** Con uso real (varias sesiones semanales × ~6 ejercicios × un año) se podía
+  superar sin ningún error — el mismo patrón de fallo silencioso que ya está documentado
+  dos veces en `CLAUDE.md` (normalización de ejercicios, `gym_logs.completed`). Se agregó
+  un loop con `.range()` que pagina hasta traer todas las filas.
+- **`MesDetalle` calculaba el máximo de intensidad sobre todo el año cargado, no sobre el
+  mes visible**, contradiciendo directamente el fundamento de diseño del spec (intensidad
+  relativa al período visible). Se corrigió filtrando `dias` al mes antes de calcular
+  `maximo` y `porFecha`.
+- **La leyenda de `MesDetalle` podía listar grupos que nunca fueron el dominante de ningún
+  día del mes** (el filtro incluía coincidencia por `porGrupo`, no solo por `dominante`,
+  que es lo único que pinta una celda). Se angostó el filtro a `d.dominante === g`.
+- De paso, un hallazgo Minor barato: `BarrasPorGrupo` tomaba `volumen[0].series` como el
+  mayor, pero `volumenPorGrupo()` siempre pone `'Sin clasificar'` último aunque tenga más
+  series — se corrigió a `Math.max(...)`.
+
+Un solo fix dispatch + una re-revisión escópica confirmaron los cuatro puntos corregidos
+sin romper nada (commits `4adf881..f1bb332`).
+
+### Verificación manual con datos reales (2026-09-08, en vivo con el usuario)
+
+Confirmado en el navegador contra la base real: 39 sesiones, tira anual con los días
+verdes en el rango correcto, el 1 de septiembre alineado en la columna correcta del
+calendario, panel del día 7/9 mostrando "Pecho + Tríceps + Core" con 12/8/3 series
+coincidiendo con la leyenda, barras del mes sumando 100% (52%/35%/13%), y el día 8/9
+(cardio sin series cargadas) pintado en el color de Cardio con el texto "Sesión sin
+series cargadas." — el comportamiento documentado en el spec, no un bug. Consola del
+navegador sin errores.
