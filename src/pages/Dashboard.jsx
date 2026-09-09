@@ -554,10 +554,8 @@ export default function Dashboard({ session }) {
                 )
               )}
 
-              {reporteVista === 'actividad' && (() => {
-                const diasDelMes = actividad.filter(d => d.date.startsWith(mesActividad))
-
-                return actividad.length === 0 ? (
+              {reporteVista === 'actividad' && (
+                actividad.length === 0 ? (
                   <div style={{ color: C.textMuted, textAlign: 'center', padding: '2rem' }}>
                     No hay sesiones completadas en el último año.
                   </div>
@@ -576,10 +574,10 @@ export default function Dashboard({ session }) {
                       onSeleccionarDia={setDiaSeleccionado}
                     />
                     <PanelDia dia={actividad.find(d => d.date === diaSeleccionado)} />
-                    <BarrasPorGrupo volumen={volumenPorGrupo(diasDelMes)} titulo="Volumen del mes" />
+                    <BarrasPorGrupo volumen={volumenPorGrupo(actividad.filter(d => d.date.startsWith(mesActividad)))} titulo="Volumen del mes" />
                   </div>
                 )
-              })()}
+              )}
             </>
           )}
         </div>
