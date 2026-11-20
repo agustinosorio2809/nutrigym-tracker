@@ -1,12 +1,27 @@
-name: Build APK
+name: CI and Build APK
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+
+# Si llega un push nuevo mientras corre uno anterior de la misma rama,
+# se cancela el viejo y no se gastan minutos de runner.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  # CI: lint y tests en cada push y en cada pull request.
+  # No necesita secrets, asi que tambien corre en PRs de forks.
+  test:
+    name: Lint and test
     runs-on: ubuntu-latest
 
     steps:
@@ -17,9 +32,36 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+  # Build del APK: solo en push a main y solo si lint y tests pasaron.
+  build:
+    name: Build APK
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build web app
         run: npm run build
